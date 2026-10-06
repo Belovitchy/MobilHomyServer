@@ -45,17 +45,17 @@ public class DataSeeder {
 
             Auth authOwner = authRepository.save(Auth.builder()
                     .utilisateur(Owner.builder().firstname("Paul").name("Dupont").phone("0600000001").build())
-                    .login("dupont@mail.fr").password(encoder.encode("proprietaire"))
+                    .login("dupont@mail.fr").password(encoder.encode("owner"))
                     .authority("OWNER").build());
 
             Auth authManager = authRepository.save(Auth.builder()
                     .utilisateur(Manager.builder().firstname("Marc").name("Durand").phone("0600000002").build())
-                    .login("marc@mail.fr").password(encoder.encode("gerant"))
+                    .login("marc@mail.fr").password(encoder.encode("manager"))
                     .authority("MANAGER").build());
 
             Auth authVacancier = authRepository.save(Auth.builder()
                     .utilisateur(Vacationer.builder().firstname("Julie").name("Martin").phone("0600000003").build())
-                    .login("julie@mail.fr").password(encoder.encode("vacancier"))
+                    .login("julie@mail.fr").password(encoder.encode("vacationer"))
                     .authority("VACATIONER").build());
 
             Owner owner = (Owner) authOwner.getUtilisateur();
