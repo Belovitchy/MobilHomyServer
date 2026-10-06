@@ -21,6 +21,9 @@ public class AuthenticationService {
                 new UsernamePasswordAuthenticationToken(request.getLogin(), request.getPassword()));
 
         Auth auth = authRepository.findByLogin(request.getLogin()).orElseThrow();
-        return new AuthenticationResponse(jwtService.generateToken(auth));
+        return new AuthenticationResponse(
+                jwtService.generateToken(auth),
+                auth.getUtilisateur().getFirstname(),
+                auth.getUtilisateur().getName());
     }
 }
