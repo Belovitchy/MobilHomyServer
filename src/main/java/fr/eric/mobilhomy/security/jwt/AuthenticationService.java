@@ -24,6 +24,8 @@ public class AuthenticationService {
         return new AuthenticationResponse(
                 jwtService.generateToken(auth),
                 auth.getUtilisateur().getFirstname(),
-                auth.getUtilisateur().getName());
+                auth.getUtilisateur().getName(),
+                auth.getAuthority());
+
     }
 }

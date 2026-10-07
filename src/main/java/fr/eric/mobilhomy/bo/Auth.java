@@ -40,12 +40,12 @@ public class Auth implements UserDetails {
     private String password;
 
     @Column(length = 50)
-    private String authority;
+    private RolesEnum authority;
 
     @Override
     @NonNull
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority(authority));
+        return List.of(new SimpleGrantedAuthority(authority.toString()));
     }
 
     @Override
