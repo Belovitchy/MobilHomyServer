@@ -78,7 +78,9 @@ public class DataSeeder {
                     .name("Océane")
                     .description("Mobil-home 3 chambres, terrasse bois, climatisation")
                     .location("La Réserve").capacity(6)
-                    .adress("Camping Siblu La Réserve, 17 Rue du Lac, Ronce-les-Bains")
+                    .address("Camping Siblu La Réserve, 17 Rue du Lac, Ronce-les-Bains")
+                    .postalCode("33100")
+                    .price(BigDecimal.valueOf(80))
                     .icalLink("https://ical.booking.com/v1/export?t=XXXX")
                     .build());
 
@@ -87,14 +89,16 @@ public class DataSeeder {
                     .name("Azur")
                     .description("Mobil-home 2 chambres, proche plage")
                     .location("Le Bois Soleil").capacity(4)
-                    .adress("Camping Siblu Le Bois Soleil, Saint-Georges-de-Didonne")
+                    .address("Camping Siblu Le Bois Soleil, Saint-Georges-de-Didonne")
+                    .postalCode("13045")
+                    .price(BigDecimal.valueOf(100))
                     .icalLink("https://www.airbnb.fr/calendar/ical/XXXX.ics")
                     .build());
 
             // ── 5. IMAGES ──
-            imageRepository.save(Image.builder().mobilhome(océane).path("/images/ocene-1.jpg").build());
-            imageRepository.save(Image.builder().mobilhome(océane).path("/images/ocene-2.jpg").build());
-            imageRepository.save(Image.builder().mobilhome(azur).path("/images/azur-1.jpg").build());
+            imageRepository.save(Image.builder().mobilhome(océane).path("/images/oceane-1.webp").build());
+            imageRepository.save(Image.builder().mobilhome(océane).path("/images/oceane-2.webp").build());
+            imageRepository.save(Image.builder().mobilhome(azur).path("/images/azur-1.webp").build());
 
             // ── 6. INVOICE (factures de fonctionnement du gérant) ──
             invoiceRepository.save(Invoice.builder().owner(owner)

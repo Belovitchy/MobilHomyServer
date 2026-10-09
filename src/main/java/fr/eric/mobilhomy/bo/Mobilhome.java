@@ -1,10 +1,12 @@
 package fr.eric.mobilhomy.bo;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+import org.hibernate.annotations.BatchSize;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -33,8 +35,30 @@ public class Mobilhome {
 
     private int capacity;
 
-    private String adress;
+    private String address;
+
+    private String postalCode;
+
+    private BigDecimal price;
 
     private String icalLink;
+
+    @OneToMany(mappedBy = "mobilhome", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @BatchSize(size = 20)
+    @Builder.Default
+    @ToString.Exclude
+    private List<Image> images = new ArrayList<>();
+
+    @OneToMany(mappedBy = "mobilhome", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @BatchSize(size = 20)
+    @Builder.Default
+    @ToString.Exclude
+    private List<Reservation> reservations = new ArrayList<>();
+
+    @OneToMany(mappedBy = "mobilhome", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @BatchSize(size = 20)
+    @Builder.Default
+    @ToString.Exclude
+    private List<Contract> contracts = new ArrayList<>();
 
 }
