@@ -23,6 +23,7 @@ public class AuthenticationService {
         Auth auth = authRepository.findByLogin(request.getLogin()).orElseThrow();
         return new AuthenticationResponse(
                 jwtService.generateToken(auth),
+                auth.getUtilisateur().getId(),
                 auth.getUtilisateur().getFirstname(),
                 auth.getUtilisateur().getName(),
                 auth.getAuthority());

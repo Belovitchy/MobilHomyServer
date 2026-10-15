@@ -7,7 +7,7 @@ import fr.eric.mobilhomy.bo.ReservationStatus;
 import java.math.BigDecimal;
 import java.util.List;
 
-public record MobilhomeVacationerResponseDto(
+public record MobilhomeVisitorResponseDto(
         Integer id,
         String name,
         String description,
@@ -19,8 +19,8 @@ public record MobilhomeVacationerResponseDto(
         List<String> images,
         List<ReservationDateValidatedDto> reservations
 ) {
-    public static MobilhomeVacationerResponseDto fromEntity(Mobilhome m) {
-        return new MobilhomeVacationerResponseDto(
+    public static MobilhomeVisitorResponseDto fromEntity(Mobilhome m) {
+        return new MobilhomeVisitorResponseDto(
                 m.getId(),
                 m.getName(),
                 m.getDescription(),

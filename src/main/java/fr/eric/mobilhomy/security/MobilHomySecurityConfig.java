@@ -44,7 +44,7 @@ public class MobilHomySecurityConfig {
                 // Consultation libre des annonces (accès sans compte, cf. cahier des charges)
                 .requestMatchers(HttpMethod.GET, "/api/mobilhomes/**").permitAll()
                 // Vacancier : demandes de réservation
-                .requestMatchers("/api/reservations/**").hasAuthority("VACATIONER")
+                .requestMatchers("/api/vacationer/**").hasAuthority("VACATIONER")
                 // Propriétaire : mobil-homes, gérants, validation, iCal
                 .requestMatchers("/api/owner/**").hasAuthority("OWNER")
                 // Gérant : réservations, factures

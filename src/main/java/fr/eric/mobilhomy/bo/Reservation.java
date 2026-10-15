@@ -36,6 +36,7 @@ public class Reservation {
     private String sibluRef;
 
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private ReservationStatus status = ReservationStatus.PENDING;
 
     @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
