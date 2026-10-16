@@ -39,10 +39,6 @@ public class Reservation {
     @Builder.Default
     private ReservationStatus status = ReservationStatus.PENDING;
 
-    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @JoinColumn(name = "contract_id")
-    private Contract contract;
-
     @OneToMany(mappedBy = "reservation", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<Occupant> occupants = new ArrayList<>();

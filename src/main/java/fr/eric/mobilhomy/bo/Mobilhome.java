@@ -55,10 +55,4 @@ public class Mobilhome {
     @ToString.Exclude
     private List<Reservation> reservations = new ArrayList<>();
 
-    @OneToMany(mappedBy = "mobilhome", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @BatchSize(size = 20)
-    @Builder.Default
-    @ToString.Exclude
-    private List<Contract> contracts = new ArrayList<>();
-
 }

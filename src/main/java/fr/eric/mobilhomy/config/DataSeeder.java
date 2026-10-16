@@ -111,18 +111,7 @@ public class DataSeeder {
                     .status(InvoiceStatus.ISSUED).build());
 
 
-            // ── 7. RESERVATIONS + CONTRATS (persistés ensemble via le cascade) ──
-            Contract contratSigne = Contract.builder()
-                    .vacationer(vacationer).mobilhome(océane)
-                    .signed(true)   // retourné signé → valide la réservation
-                    .path("/contrats/contrat-SBLU-2026-0001.pdf")
-                    .build();
 
-            Contract contratEnvoye = Contract.builder()
-                    .vacationer(vacationer).mobilhome(azur)
-                    .signed(false)  // envoyé, en attente de signature
-                    .path("/contrats/contrat-SBLU-2026-0002.pdf")
-                    .build();
 
             // ── RESERVATIONS (vacancier + mobilhome + workflow) ──
             // Confirmée : contrat signé rattaché
@@ -134,14 +123,12 @@ public class DataSeeder {
                     .status(ReservationStatus.VALIDATED)
                     .immat("AA-123-BB")
                     .sibluRef("SBLU-2026-0001")
-                    .contract(contratSigne)
                     .build());
 
             // Contrat envoyé, pas encore signé
             Reservation resa2 = reservationRepository.save(Reservation.builder()
                     .vacationer(vacationer)
-                    .mobilhome(azur)
-                    .contract(contratEnvoye)             // signed=false ↔ CONTRACT_SENT
+                    .mobilhome(azur)          // signed=false ↔ CONTRACT_SENT
                     .startDate(LocalDate.of(2026, 8, 22))
                     .endDate(LocalDate.of(2026, 8, 29))
                     .numberOfPerson(3)

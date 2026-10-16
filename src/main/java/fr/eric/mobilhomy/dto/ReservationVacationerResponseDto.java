@@ -1,8 +1,10 @@
 package fr.eric.mobilhomy.dto;
 
+import fr.eric.mobilhomy.bo.Occupant;
 import fr.eric.mobilhomy.bo.Reservation;
 import fr.eric.mobilhomy.bo.ReservationStatus;
-import jakarta.annotation.Nullable;
+
+import java.util.List;
 
 public record ReservationVacationerResponseDto(
         Integer id,
@@ -11,17 +13,10 @@ public record ReservationVacationerResponseDto(
         String start_date,
         String  end_date,
         ReservationStatus status,
-        Integer contractId,
-        boolean contractSigned
-        // Renseignés par le back UNIQUEMENT si confirmée (RG-07)
-//        @Nullable
-//        String managerFirstname,
-//        @Nullable
-//        String managerName,
-//        @Nullable
-//        String managerPhone,
-//        @Nullable
-//        String managerEmail
+        String immat,
+        List<OccupantResponseDto> occupants,
+        ManagerResponseDto manager
+
 
 ) {
     public static ReservationVacationerResponseDto fromEntity(Reservation reservation) {
@@ -32,8 +27,14 @@ public record ReservationVacationerResponseDto(
                 reservation.getStartDate().toString(),
                 reservation.getEndDate().toString(),
                 reservation.getStatus(),
-                reservation.getContract() == null ? null : reservation.getContract().getId(),
-                reservation.getContract() != null && reservation.getContract().isSigned()
+                reservation.getImmat(),
+                reservation.getOccupants() !=null ?
+                        reservation.getOccupants().stream()
+                                .map(OccupantResponseDto::fromOccupant)
+                                .toList() : List.of(),
+                        reservation.getStatus() == ReservationStatus.VALIDATED
+                                ? ManagerResponseDto.fromEntity(reservation.getMobilhome().getManager())
+                                : null
                 );
     }
 }

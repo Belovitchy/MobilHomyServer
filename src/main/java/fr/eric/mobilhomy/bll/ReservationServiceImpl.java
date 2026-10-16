@@ -1,12 +1,12 @@
 package fr.eric.mobilhomy.bll;
 
 import fr.eric.mobilhomy.bo.*;
-import fr.eric.mobilhomy.dal.ContractRepository;
 import fr.eric.mobilhomy.dal.MobilhomeRepository;
 import fr.eric.mobilhomy.dal.ReservationRepository;
 import fr.eric.mobilhomy.dal.VacationerRepository;
 import fr.eric.mobilhomy.dto.ReservationVacationerRequestDto;
 import fr.eric.mobilhomy.dto.ReservationVacationerResponseDto;
+import fr.eric.mobilhomy.dto.ReservationVacationerUpdateRequestDto;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +19,6 @@ public class ReservationServiceImpl implements ReservationService{
     private final ReservationRepository reservationRepository;
     private final VacationerRepository vacationerRepository;
     private final MobilhomeRepository mobilhomeRepository;
-    private final ContractRepository contractRepository;
 
     @Override
     public ReservationVacationerResponseDto addReservation(Integer userId, ReservationVacationerRequestDto req) {
@@ -33,8 +32,7 @@ public class ReservationServiceImpl implements ReservationService{
                 .orElseThrow(() -> new RuntimeException("Vacationer not found with id: " + userId));
         Mobilhome mobilhome = mobilhomeRepository.findById(req.mobilhomeId())
                 .orElseThrow(() -> new RuntimeException("Mobilhome not found with id: " + req.mobilhomeId()));
-        Contract contract = contractRepository.save(Contract.builder()
-                .vacationer(vacationer).mobilhome(mobilhome).signed(false).build());
+
         Reservation res = Reservation.builder()
                 .vacationer(vacationer)
                 .mobilhome(mobilhome)
@@ -43,7 +41,6 @@ public class ReservationServiceImpl implements ReservationService{
                 .numberOfPerson(req.occupants() == null? 0: req.occupants().size())
                 .immat(req.immat())
                 .status(ReservationStatus.PENDING)
-                .contract(contract)
                 .build();
         if (req.occupants() != null) {
             req.occupants().forEach(o -> res.getOccupants().add(Occupant.builder()
@@ -66,5 +63,49 @@ public class ReservationServiceImpl implements ReservationService{
                 .stream()
                 .map(ReservationVacationerResponseDto::fromEntity)
                 .toList();
+    }
+
+
+    @Override
+    public ReservationVacationerResponseDto updateReservation(Integer userId, Integer resaId, ReservationVacationerUpdateRequestDto req) {
+        Reservation res = reservationRepository.getById(resaId);
+        if(!res.getVacationer().getId().equals(userId))
+            throw new IllegalArgumentException("Reservation not found");
+        res.setImmat(req.immat());
+        if(req.occupants() != null){
+            res.getOccupants().clear();
+            res.setStatus(ReservationStatus.PENDING);
+            req.occupants().forEach(o -> res.getOccupants().add(Occupant.builder()
+                            .firstname(o.firstName())
+                            .name(o.lastName())
+                            .age(o.age())
+                            .reservation(res)
+                            .build()));
+            res.setNumberOfPerson(req.occupants().size());
+        }
+         Reservation updated = reservationRepository.save(res);
+        return ReservationVacationerResponseDto.fromEntity(updated);
+    }
+
+    @Override
+    public ReservationVacationerResponseDto submitReservation(Integer userId, Integer resaId, ReservationVacationerUpdateRequestDto req) {
+        Reservation res = reservationRepository.getById(resaId);
+        if(!res.getVacationer().getId().equals(userId))
+            throw new IllegalArgumentException("Reservation not found");
+        res.setImmat(req.immat());
+
+        if(req.occupants() != null){
+            res.getOccupants().clear();
+            res.setStatus(ReservationStatus.COMPLETED);
+            req.occupants().forEach(o -> res.getOccupants().add(Occupant.builder()
+                    .firstname(o.firstName())
+                    .name(o.lastName())
+                    .age(o.age())
+                    .reservation(res)
+                    .build()));
+            res.setNumberOfPerson(req.occupants().size());
+        }
+        Reservation updated = reservationRepository.save(res);
+        return ReservationVacationerResponseDto.fromEntity(updated);
     }
 }
