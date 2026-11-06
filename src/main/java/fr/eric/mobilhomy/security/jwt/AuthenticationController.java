@@ -1,5 +1,7 @@
 package fr.eric.mobilhomy.security.jwt;
 
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,5 +21,11 @@ public class AuthenticationController {
     @PostMapping("/login")
     public ResponseEntity<AuthenticationResponse> login(@RequestBody AuthenticationRequest request) {
         return ResponseEntity.ok(authenticationService.authenticate(request));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<Void> register(@RequestBody @Valid VacationerRegisterRequest request) {
+        authenticationService.registerVacationer(request);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 }
