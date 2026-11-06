@@ -32,6 +32,7 @@ public class Auth implements UserDetails {
             fetch = FetchType.LAZY
     )
     @JoinColumn(name = "utilisateur_id", nullable = false, unique = true)
+    @ToString.Exclude
     private Utilisateur utilisateur;
 
     @Column(nullable = false, unique = true)
