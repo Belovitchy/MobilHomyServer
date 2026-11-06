@@ -37,9 +37,6 @@ class ReservationServiceTest {
     @Mock
     private MobilhomeRepository mobilhomeRepository;
 
-    @Mock
-    private ContractRepository contractRepository;
-
     @InjectMocks
     private ReservationServiceImpl reservationService;
 
@@ -102,11 +99,7 @@ class ReservationServiceTest {
 
         when(vacationerRepository.findById(1)).thenReturn(Optional.of(vacationer));
         when(mobilhomeRepository.findById(10)).thenReturn(Optional.of(mobilhome));
-        when(contractRepository.save(any(Contract.class))).thenAnswer(i -> {
-            Contract c = i.getArgument(0);
-            c.setId(100);
-            return c;
-        });
+
         when(reservationRepository.save(any(Reservation.class))).thenAnswer(i -> {
             Reservation r = i.getArgument(0);
             r.setId(50);
