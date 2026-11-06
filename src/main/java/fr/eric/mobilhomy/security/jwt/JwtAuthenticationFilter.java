@@ -2,6 +2,7 @@ package fr.eric.mobilhomy.security.jwt;
 
 import java.io.IOException;
 
+import io.jsonwebtoken.JwtException;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,7 +40,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         final String jwt = authHeader.substring(7); // 7 = longueur de "Bearer "
-        final String userLogin = jwtService.extractUserName(jwt);
+        String userLogin = null;
+
+        try {
+            userLogin = jwtService.extractUserName(jwt);
+        } catch (JwtException | IllegalArgumentException e) {
+            // Token malformé / expiré / signature invalide → on l'ignore
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         if (userLogin != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(userLogin);
