@@ -127,7 +127,7 @@ class ReservationServiceTest {
         List<ReservationVacationerResponseDto> responses = reservationService.getReservationsByUserId(1);
 
         assertEquals(1, responses.size());
-        assertEquals(50, responses.get(0).id());
+        assertEquals(50, responses.getFirst().id());
 
     }
 }

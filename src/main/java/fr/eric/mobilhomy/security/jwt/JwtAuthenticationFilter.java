@@ -40,7 +40,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         final String jwt = authHeader.substring(7); // 7 = longueur de "Bearer "
-        String userLogin = null;
+        String userLogin;
 
         try {
             userLogin = jwtService.extractUserName(jwt);
