@@ -2,6 +2,7 @@ package fr.eric.mobilhomy.security.jwt;
 
 import fr.eric.mobilhomy.dal.AuthRepository;
 import lombok.AllArgsConstructor;
+import org.jspecify.annotations.NonNull;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.*;
@@ -12,6 +13,8 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.util.Objects;
 
 @Configuration
 @AllArgsConstructor
@@ -30,9 +33,9 @@ public class JwtMobilHomyConfig {
                                                   PasswordEncoder passwordEncoder){
         return new AuthenticationProvider() {
             @Override
-            public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+            public Authentication authenticate(@NonNull Authentication authentication) throws AuthenticationException {
                 String username = authentication.getName();
-                String password = authentication.getCredentials().toString();
+                String password = Objects.requireNonNull(authentication.getCredentials()).toString();
 
                 UserDetails user = userDetailsService.loadUserByUsername(username);
                 if (!passwordEncoder.matches(password, user.getPassword())) {
@@ -42,7 +45,7 @@ public class JwtMobilHomyConfig {
             }
 
             @Override
-            public boolean supports(Class<?> authentication) {
+            public boolean supports(@NonNull Class<?> authentication) {
                 return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication);
             }
         };
