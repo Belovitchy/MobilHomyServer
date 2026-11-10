@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Même JDK que la toolchain du build.gradle (Java 21)
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Installe Gradle via le wrapper du projet + cache des dépendances entre deux runs
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Le wrapper commité depuis Windows n'a pas toujours le droit d'exécution sous Linux
+      - run: chmod +x gradlew
+
+      # build = compilation + tests unitaires et d'intégration (base H2, profil "test")
+      - run: ./gradlew build --no-daemon
+
+      # En cas d'échec, le rapport HTML des tests est téléchargeable depuis la page du run
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: rapport-tests
+          path: build/reports/tests/test/
