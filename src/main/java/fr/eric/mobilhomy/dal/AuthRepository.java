@@ -10,4 +10,6 @@ public interface AuthRepository extends JpaRepository<Auth, Integer> {
 
     @EntityGraph(attributePaths = "utilisateur")
     Optional<Auth> findByLogin(String login);
+
+    boolean existsByLogin(String login);
 }

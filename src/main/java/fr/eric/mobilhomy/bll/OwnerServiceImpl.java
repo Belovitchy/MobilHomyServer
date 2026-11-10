@@ -1,0 +1,393 @@
+package fr.eric.mobilhomy.bll;
+
+import fr.eric.mobilhomy.bo.*;
+import fr.eric.mobilhomy.dal.*;
+import fr.eric.mobilhomy.dto.*;
+import fr.eric.mobilhomy.exception.BusinessRuleException;
+import fr.eric.mobilhomy.exception.NotFoundException;
+import lombok.AllArgsConstructor;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+
+@Service
+@AllArgsConstructor
+public class OwnerServiceImpl implements OwnerService {
+
+    /**
+     * Statut « demande soumise par le vacancier, à traiter par le propriétaire ».
+     * Dans l'application actuelle c'est COMPLETED (cf. submitReservation et l'onglet « À traiter » du front).
+     */
+    static final ReservationStatus SUBMITTED = ReservationStatus.COMPLETED;
+
+    /** Statuts qui interdisent de supprimer un mobil-home (on ne détruit pas un engagement ni une demande en cours). */
+    static final Set<ReservationStatus> BLOCKING_STATUSES = EnumSet.of(ReservationStatus.VALIDATED, SUBMITTED);
+
+    /** Statuts affichés dans le calendrier du propriétaire. */
+    static final Set<ReservationStatus> CALENDAR_STATUSES = EnumSet.of(ReservationStatus.VALIDATED, SUBMITTED);
+
+    private final MobilhomeRepository mobilhomeRepository;
+    private final ReservationRepository reservationRepository;
+    private final OwnerManagerRepository ownerManagerRepository;
+    private final OwnerRepository ownerRepository;
+    private final AuthRepository authRepository;
+    private final ImageRepository imageRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    // =====================================================================
+    // Mobil-homes
+    // =====================================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OwnerMobilhomeResponseDto> getMobilhomes(Integer ownerId) {
+        requireId(ownerId);
+        return mobilhomeRepository.findAllByOwnerIdWithImages(ownerId).stream()
+                .map(OwnerMobilhomeResponseDto::fromEntity)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public OwnerMobilhomeResponseDto createMobilhome(Integer ownerId, OwnerMobilhomeRequestDto req) {
+        requireId(ownerId);
+        Owner owner = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new NotFoundException("Propriétaire introuvable"));
+
+        Mobilhome m = Mobilhome.builder().owner(owner).build();
+        applyRequest(ownerId, m, req);
+        return OwnerMobilhomeResponseDto.fromEntity(mobilhomeRepository.save(m));
+    }
+
+    @Override
+    @Transactional
+    public OwnerMobilhomeResponseDto updateMobilhome(Integer ownerId, Integer mobilhomeId, OwnerMobilhomeRequestDto req) {
+        Mobilhome m = getOwnedMobilhome(ownerId, mobilhomeId);
+        applyRequest(ownerId, m, req);
+        return OwnerMobilhomeResponseDto.fromEntity(mobilhomeRepository.save(m));
+    }
+
+    @Override
+    @Transactional
+    public void deleteMobilhome(Integer ownerId, Integer mobilhomeId) {
+        Mobilhome m = getOwnedMobilhome(ownerId, mobilhomeId);
+        if (reservationRepository.existsByMobilhomeIdAndStatusIn(m.getId(), BLOCKING_STATUSES)) {
+            throw new BusinessRuleException(
+                    "Ce mobil-home a des réservations validées ou en attente de traitement : suppression impossible");
+        }
+        // Cascade : images, brouillons et réservations refusées/annulées sont supprimés avec lui.
+        mobilhomeRepository.delete(m);
+    }
+
+    /** Copie les champs de la requête dans l'entité (création comme modification). */
+    private void applyRequest(Integer ownerId, Mobilhome m, OwnerMobilhomeRequestDto req) {
+        if (req == null) {
+            throw new IllegalArgumentException("Request body must not be null");
+        }
+        m.setName(req.title().trim());
+        m.setDescription(trimToNull(req.description()));
+        m.setLocation(trimToNull(req.location()));
+        m.setAddress(req.address().trim());
+        m.setPostalCode(req.postalCode());
+        m.setCapacity(req.capacity());
+        m.setPrice(req.price());
+        m.setIcalLink(trimToNull(req.icalLink()));
+
+        if (req.managerId() == null) {
+            m.setManager(null);
+        } else {
+            // Un propriétaire ne peut affecter qu'un de SES gérants.
+            OwnerManager link = ownerManagerRepository.findByOwnerIdAndManagerId(ownerId, req.managerId())
+                    .orElseThrow(() -> new NotFoundException("Gérant introuvable"));
+            m.setManager(link.getManager());
+        }
+
+        // Remplacement complet de la liste d'images.
+        if (req.images() != null) {
+            if (!m.getImages().isEmpty()) {
+                imageRepository.deleteAll(m.getImages());
+                m.getImages().clear();
+            }
+            req.images().stream()
+                    .map(String::trim)
+                    .distinct()
+                    .forEach(path -> m.getImages().add(Image.builder().path(path).mobilhome(m).build()));
+        }
+    }
+
+    private Mobilhome getOwnedMobilhome(Integer ownerId, Integer mobilhomeId) {
+        requireId(ownerId);
+        requireId(mobilhomeId);
+        return mobilhomeRepository.findByIdAndOwnerId(mobilhomeId, ownerId)
+                .orElseThrow(() -> new NotFoundException("Mobil-home introuvable"));
+    }
+
+    // =====================================================================
+    // Gérants
+    // =====================================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ManagerResponseDto> getManagers(Integer ownerId) {
+        requireId(ownerId);
+        return ownerManagerRepository.findManagersByOwnerId(ownerId).stream()
+                .map(ManagerResponseDto::fromEntity)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public ManagerResponseDto createManager(Integer ownerId, OwnerManagerRequestDto req) {
+        requireId(ownerId);
+        if (req.password() == null || req.password().isBlank()) {
+            throw new IllegalArgumentException("Le mot de passe est obligatoire à la création d'un gérant");
+        }
+        String email = normalizeEmail(req.email());
+        if (authRepository.existsByLogin(email)) {
+            throw new BusinessRuleException("Email déjà utilisé");
+        }
+        Owner owner = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new NotFoundException("Propriétaire introuvable"));
+
+        Manager manager = Manager.builder()
+                .firstname(req.firstname().trim())
+                .name(req.name().trim())
+                .phone(req.phone().trim())
+                .build();
+        Auth auth = Auth.builder()
+                .login(email)
+                .password(passwordEncoder.encode(req.password()))
+                .authority(RolesEnum.MANAGER)
+                .utilisateur(manager)
+                .build();
+        manager.setAuth(auth);
+        authRepository.save(auth); // cascade ALL : le Manager est persisté avec son Auth
+
+        ownerManagerRepository.save(OwnerManager.builder().owner(owner).manager(manager).build());
+        return ManagerResponseDto.fromEntity(manager);
+    }
+
+    @Override
+    @Transactional
+    public ManagerResponseDto updateManager(Integer ownerId, Integer managerId, OwnerManagerRequestDto req) {
+        Manager manager = getOwnedManager(ownerId, managerId);
+
+        manager.setFirstname(req.firstname().trim());
+        manager.setName(req.name().trim());
+        manager.setPhone(req.phone().trim());
+
+        String email = normalizeEmail(req.email());
+        Auth auth = manager.getAuth();
+        if (auth != null && !email.equalsIgnoreCase(auth.getLogin())) {
+            if (authRepository.existsByLogin(email)) {
+                throw new BusinessRuleException("Email déjà utilisé");
+            }
+            auth.setLogin(email);
+        }
+        // Le mot de passe n'est pas modifiable par le propriétaire (c'est au gérant de le faire).
+        return ManagerResponseDto.fromEntity(manager);
+    }
+
+    @Override
+    @Transactional
+    public void deleteManager(Integer ownerId, Integer managerId) {
+        OwnerManager link = getOwnerManagerLink(ownerId, managerId);
+        Manager manager = link.getManager();
+
+        // 1. Les mobil-homes du propriétaire n'ont plus de gérant.
+        mobilhomeRepository.findByOwnerIdAndManagerId(ownerId, managerId)
+                .forEach(m -> m.setManager(null));
+
+        // 2. On retire le lien propriétaire ↔ gérant.
+        ownerManagerRepository.delete(link);
+        ownerManagerRepository.flush();
+
+        // 3. Si le gérant ne travaille plus pour personne, on supprime son compte (Auth → Manager en cascade).
+        if (ownerManagerRepository.countByManagerId(managerId) == 0 && manager.getAuth() != null) {
+            authRepository.delete(manager.getAuth());
+        }
+    }
+
+    private Manager getOwnedManager(Integer ownerId, Integer managerId) {
+        return getOwnerManagerLink(ownerId, managerId).getManager();
+    }
+
+    private OwnerManager getOwnerManagerLink(Integer ownerId, Integer managerId) {
+        requireId(ownerId);
+        requireId(managerId);
+        return ownerManagerRepository.findByOwnerIdAndManagerId(ownerId, managerId)
+                .orElseThrow(() -> new NotFoundException("Gérant introuvable"));
+    }
+
+    // =====================================================================
+    // Réservations
+    // =====================================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OwnerReservationResponseDto> getReservations(Integer ownerId, ReservationStatus status) {
+        requireId(ownerId);
+        List<Reservation> reservations = status == null
+                ? reservationRepository.findAllByOwnerId(ownerId)
+                : reservationRepository.findAllByOwnerIdAndStatus(ownerId, status);
+        return reservations.stream().map(OwnerReservationResponseDto::fromEntity).toList();
+    }
+
+    @Override
+    @Transactional
+    public OwnerReservationResponseDto validateReservation(Integer ownerId, Integer reservationId) {
+        Reservation r = getOwnedReservation(ownerId, reservationId);
+        requireStatus(r, SUBMITTED, "valider");
+        if (r.getStartDate() == null || r.getEndDate() == null || !r.getStartDate().isBefore(r.getEndDate())) {
+            throw new BusinessRuleException("Dates de séjour invalides");
+        }
+        boolean overlap = reservationRepository.existsOverlap(
+                r.getMobilhome().getId(), r.getId(), ReservationStatus.VALIDATED, r.getStartDate(), r.getEndDate());
+        if (overlap) {
+            throw new BusinessRuleException("Le mobil-home est déjà réservé sur tout ou partie de cette période");
+        }
+        r.setStatus(ReservationStatus.VALIDATED);
+        return OwnerReservationResponseDto.fromEntity(reservationRepository.save(r));
+    }
+
+    @Override
+    @Transactional
+    public OwnerReservationResponseDto rejectReservation(Integer ownerId, Integer reservationId) {
+        Reservation r = getOwnedReservation(ownerId, reservationId);
+        requireStatus(r, SUBMITTED, "refuser");
+        r.setStatus(ReservationStatus.REJECTED);
+        return OwnerReservationResponseDto.fromEntity(reservationRepository.save(r));
+    }
+
+    private Reservation getOwnedReservation(Integer ownerId, Integer reservationId) {
+        requireId(ownerId);
+        requireId(reservationId);
+        return reservationRepository.findByIdAndMobilhomeOwnerId(reservationId, ownerId)
+                .orElseThrow(() -> new NotFoundException("Réservation introuvable"));
+    }
+
+    private static void requireStatus(Reservation r, ReservationStatus expected, String action) {
+        if (r.getStatus() != expected) {
+            throw new BusinessRuleException(
+                    "Impossible de " + action + " une réservation au statut " + r.getStatus());
+        }
+    }
+
+    // =====================================================================
+    // Calendrier
+    // =====================================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CalendarEventDto> getCalendar(Integer ownerId, Integer mobilhomeId) {
+        requireId(ownerId);
+        if (mobilhomeId != null) {
+            getOwnedMobilhome(ownerId, mobilhomeId); // 404 si le mobil-home n'est pas à lui
+        }
+        return reservationRepository.findAllByOwnerId(ownerId).stream()
+                .filter(r -> CALENDAR_STATUSES.contains(r.getStatus()))
+                .filter(r -> r.getStartDate() != null && r.getEndDate() != null)
+                .filter(r -> mobilhomeId == null || mobilhomeId.equals(r.getMobilhome().getId()))
+                .map(CalendarEventDto::fromReservation)
+                .toList();
+        // TODO évolution : fusionner ici les événements iCal externes (source = "ICAL").
+    }
+
+    // =====================================================================
+    // Mon compte
+    // =====================================================================
+
+    static final int MIN_PASSWORD_LENGTH = 8;
+
+    @Override
+    @Transactional(readOnly = true)
+    public OwnerAccountResDto getAccount(Integer ownerId) {
+        return OwnerAccountResDto.fromEntity(getOwner(ownerId));
+    }
+
+    @Override
+    @Transactional
+    public OwnerAccountResDto updateAccount(Integer ownerId, VacationerAccountReqDto req) {
+        Owner owner = getOwner(ownerId);
+        if (req == null || isBlank(req.firstname()) || isBlank(req.name())) {
+            throw new IllegalArgumentException("Le prénom et le nom sont obligatoires");
+        }
+        owner.setFirstname(req.firstname().trim());
+        owner.setName(req.name().trim());
+        owner.setPhone(trimToNull(req.phone()));
+        return OwnerAccountResDto.fromEntity(ownerRepository.save(owner));
+    }
+
+    @Override
+    @Transactional
+    public OwnerAccountResDto updateEmail(Integer ownerId, VacationerMailReqDto req) {
+        Owner owner = getOwnerWithVerifiedPassword(ownerId, req.currentPassword());
+        String email = normalizeEmail(req.newEmail());
+        Auth auth = owner.getAuth();
+        if (!email.equalsIgnoreCase(auth.getLogin())) {
+            if (authRepository.existsByLogin(email)) {
+                throw new BusinessRuleException("Email déjà utilisé");
+            }
+            auth.setLogin(email);
+            authRepository.save(auth);
+        }
+        // Le JWT porte l'ancien email : le front déconnecte l'utilisateur après ce changement.
+        return OwnerAccountResDto.fromEntity(owner);
+    }
+
+    @Override
+    @Transactional
+    public OwnerAccountResDto updatePassword(Integer ownerId, VacationerPassReqDto req) {
+        if (req.newPassword() == null || req.newPassword().length() < MIN_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException("Le mot de passe doit contenir au moins " + MIN_PASSWORD_LENGTH + " caractères");
+        }
+        Owner owner = getOwnerWithVerifiedPassword(ownerId, req.currentPassword());
+        Auth auth = owner.getAuth();
+        auth.setPassword(passwordEncoder.encode(req.newPassword()));
+        authRepository.save(auth);
+        return OwnerAccountResDto.fromEntity(owner);
+    }
+
+    private Owner getOwner(Integer ownerId) {
+        requireId(ownerId);
+        return ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new NotFoundException("Propriétaire introuvable"));
+    }
+
+    /** Changement d'email ou de mot de passe : on redemande le mot de passe actuel (ré-authentification). */
+    private Owner getOwnerWithVerifiedPassword(Integer ownerId, String currentPassword) {
+        Owner owner = getOwner(ownerId);
+        if (currentPassword == null || owner.getAuth() == null
+                || !passwordEncoder.matches(currentPassword, owner.getAuth().getPassword())) {
+            throw new BadCredentialsException("Mot de passe incorrect");
+        }
+        return owner;
+    }
+
+    // =====================================================================
+    // Utilitaires
+    // =====================================================================
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
+    }
+
+    private static void requireId(Integer id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Id must not be null");
+        }
+    }
+
+    private static String trimToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
+    }
+
+    private static String normalizeEmail(String email) {
+        return email.trim().toLowerCase();
+    }
+}
