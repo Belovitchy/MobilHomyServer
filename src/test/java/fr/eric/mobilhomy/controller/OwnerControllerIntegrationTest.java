@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -114,6 +115,41 @@ class OwnerControllerIntegrationTest {
                         .with(user(account(OWNER_LOGIN)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalide))
+                .andExpect(status().isBadRequest());
+    }
+
+    // ----- Mon compte -----
+
+    @Test
+    void proprietaire_consulteSonProfil() throws Exception {
+        mvc.perform(get("/api/owner/account").with(user(account(OWNER_LOGIN))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(OWNER_LOGIN))
+                .andExpect(jsonPath("$.firstname").value("Paul"));
+    }
+
+    @Test
+    void vacancier_neLitPasLeProfilProprietaire() throws Exception {
+        mvc.perform(get("/api/owner/account").with(user(account(VACATIONER_LOGIN))))
+                .andExpect(status().isForbidden());
+    }
+
+    // ----- Upload d'images -----
+
+    @Test
+    void uploadImage_parUnVacancier_interdit() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1, 2, 3});
+
+        mvc.perform(multipart("/api/owner/images").file(file).with(user(account(VACATIONER_LOGIN))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void uploadImage_fichierQuiNEstPasUneImage_renvoie400() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "photo.png", "image/png",
+                "pas une image, juste du texte".getBytes());
+
+        mvc.perform(multipart("/api/owner/images").file(file).with(user(account(OWNER_LOGIN))))
                 .andExpect(status().isBadRequest());
     }
 

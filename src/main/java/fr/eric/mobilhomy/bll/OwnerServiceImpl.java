@@ -6,6 +6,7 @@ import fr.eric.mobilhomy.dto.*;
 import fr.eric.mobilhomy.exception.BusinessRuleException;
 import fr.eric.mobilhomy.exception.NotFoundException;
 import lombok.AllArgsConstructor;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -298,8 +299,83 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     // =====================================================================
+    // Mon compte
+    // =====================================================================
+
+    static final int MIN_PASSWORD_LENGTH = 8;
+
+    @Override
+    @Transactional(readOnly = true)
+    public OwnerAccountResDto getAccount(Integer ownerId) {
+        return OwnerAccountResDto.fromEntity(getOwner(ownerId));
+    }
+
+    @Override
+    @Transactional
+    public OwnerAccountResDto updateAccount(Integer ownerId, VacationerAccountReqDto req) {
+        Owner owner = getOwner(ownerId);
+        if (req == null || isBlank(req.firstname()) || isBlank(req.name())) {
+            throw new IllegalArgumentException("Le prénom et le nom sont obligatoires");
+        }
+        owner.setFirstname(req.firstname().trim());
+        owner.setName(req.name().trim());
+        owner.setPhone(trimToNull(req.phone()));
+        return OwnerAccountResDto.fromEntity(ownerRepository.save(owner));
+    }
+
+    @Override
+    @Transactional
+    public OwnerAccountResDto updateEmail(Integer ownerId, VacationerMailReqDto req) {
+        Owner owner = getOwnerWithVerifiedPassword(ownerId, req.currentPassword());
+        String email = normalizeEmail(req.newEmail());
+        Auth auth = owner.getAuth();
+        if (!email.equalsIgnoreCase(auth.getLogin())) {
+            if (authRepository.existsByLogin(email)) {
+                throw new BusinessRuleException("Email déjà utilisé");
+            }
+            auth.setLogin(email);
+            authRepository.save(auth);
+        }
+        // Le JWT porte l'ancien email : le front déconnecte l'utilisateur après ce changement.
+        return OwnerAccountResDto.fromEntity(owner);
+    }
+
+    @Override
+    @Transactional
+    public OwnerAccountResDto updatePassword(Integer ownerId, VacationerPassReqDto req) {
+        if (req.newPassword() == null || req.newPassword().length() < MIN_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException("Le mot de passe doit contenir au moins " + MIN_PASSWORD_LENGTH + " caractères");
+        }
+        Owner owner = getOwnerWithVerifiedPassword(ownerId, req.currentPassword());
+        Auth auth = owner.getAuth();
+        auth.setPassword(passwordEncoder.encode(req.newPassword()));
+        authRepository.save(auth);
+        return OwnerAccountResDto.fromEntity(owner);
+    }
+
+    private Owner getOwner(Integer ownerId) {
+        requireId(ownerId);
+        return ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new NotFoundException("Propriétaire introuvable"));
+    }
+
+    /** Changement d'email ou de mot de passe : on redemande le mot de passe actuel (ré-authentification). */
+    private Owner getOwnerWithVerifiedPassword(Integer ownerId, String currentPassword) {
+        Owner owner = getOwner(ownerId);
+        if (currentPassword == null || owner.getAuth() == null
+                || !passwordEncoder.matches(currentPassword, owner.getAuth().getPassword())) {
+            throw new BadCredentialsException("Mot de passe incorrect");
+        }
+        return owner;
+    }
+
+    // =====================================================================
     // Utilitaires
     // =====================================================================
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
+    }
 
     private static void requireId(Integer id) {
         if (id == null) {

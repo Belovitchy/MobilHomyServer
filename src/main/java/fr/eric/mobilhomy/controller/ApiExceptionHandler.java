@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.Map;
 
@@ -26,6 +27,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<Map<String, String>> handleBusinessRule(BusinessRuleException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, String>> handleMaxUploadSize() {
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE)
+                .body(Map.of("message", "Fichier trop lourd (5 Mo maximum)"));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

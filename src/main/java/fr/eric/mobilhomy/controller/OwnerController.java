@@ -1,5 +1,6 @@
 package fr.eric.mobilhomy.controller;
 
+import fr.eric.mobilhomy.bll.ImageStorageService;
 import fr.eric.mobilhomy.bll.OwnerService;
 import fr.eric.mobilhomy.bo.Auth;
 import fr.eric.mobilhomy.bo.ReservationStatus;
@@ -7,11 +8,14 @@ import fr.eric.mobilhomy.dto.*;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * API de l'espace propriétaire. L'accès est limité au rôle OWNER par MobilHomySecurityConfig
@@ -24,6 +28,18 @@ import java.util.List;
 public class OwnerController {
 
     private final OwnerService ownerService;
+    private final ImageStorageService imageStorageService;
+
+    // ----- Images -----
+
+    /**
+     * Téléverse une photo (multipart, champ "file") dans uploads/images et renvoie son chemin public.
+     * Le front ajoute ensuite ce chemin à la liste "images" du mobil-home lors de l'enregistrement.
+     */
+    @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> uploadImage(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("path", imageStorageService.store(file)));
+    }
 
     // ----- Mobil-homes -----
 
@@ -109,6 +125,31 @@ public class OwnerController {
             @RequestParam(required = false) Integer mobilHomeId,
             @AuthenticationPrincipal Auth auth) {
         return ResponseEntity.ok(ownerService.getCalendar(ownerId(auth), mobilHomeId));
+    }
+
+    // ----- Mon compte (mêmes routes et mêmes corps que /api/vacationer/account) -----
+
+    @GetMapping("/account")
+    public ResponseEntity<OwnerAccountResDto> getAccount(@AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.getAccount(ownerId(auth)));
+    }
+
+    @PutMapping("/account")
+    public ResponseEntity<OwnerAccountResDto> updateAccount(
+            @Valid @RequestBody VacationerAccountReqDto req, @AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.updateAccount(ownerId(auth), req));
+    }
+
+    @PutMapping("/account/email")
+    public ResponseEntity<OwnerAccountResDto> updateEmail(
+            @Valid @RequestBody VacationerMailReqDto req, @AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.updateEmail(ownerId(auth), req));
+    }
+
+    @PutMapping("/account/password")
+    public ResponseEntity<OwnerAccountResDto> updatePassword(
+            @Valid @RequestBody VacationerPassReqDto req, @AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.updatePassword(ownerId(auth), req));
     }
 
     private static Integer ownerId(Auth auth) {

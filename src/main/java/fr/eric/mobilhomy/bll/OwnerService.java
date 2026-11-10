@@ -38,4 +38,13 @@ public interface OwnerService {
 
     // ----- Calendrier -----
     List<CalendarEventDto> getCalendar(Integer ownerId, Integer mobilhomeId);
+
+    // ----- Mon compte -----
+    OwnerAccountResDto getAccount(Integer ownerId);
+
+    OwnerAccountResDto updateAccount(Integer ownerId, VacationerAccountReqDto req);
+
+    OwnerAccountResDto updateEmail(Integer ownerId, VacationerMailReqDto req);
+
+    OwnerAccountResDto updatePassword(Integer ownerId, VacationerPassReqDto req);
 }

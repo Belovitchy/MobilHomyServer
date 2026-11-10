@@ -6,6 +6,8 @@ import fr.eric.mobilhomy.dto.OwnerManagerRequestDto;
 import fr.eric.mobilhomy.dto.OwnerMobilhomeRequestDto;
 import fr.eric.mobilhomy.dto.OwnerMobilhomeResponseDto;
 import fr.eric.mobilhomy.dto.OwnerReservationResponseDto;
+import fr.eric.mobilhomy.dto.VacationerMailReqDto;
+import fr.eric.mobilhomy.dto.VacationerPassReqDto;
 import fr.eric.mobilhomy.exception.BusinessRuleException;
 import fr.eric.mobilhomy.exception.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -250,6 +252,57 @@ class OwnerServiceTest {
                         && "{bcrypt}hash".equals(a.getPassword())
                         && a.getUtilisateur() instanceof Manager));
         verify(ownerManagerRepository).save(argThat(link -> link.getOwner() == owner));
+    }
+
+    // ----------------------------------------------------------------
+    // Mon compte
+    // ----------------------------------------------------------------
+
+    private void giveOwnerAnAccount() {
+        Auth auth = Auth.builder().login("dupont@mail.fr").password("{bcrypt}old").authority(RolesEnum.OWNER)
+                .utilisateur(owner).build();
+        owner.setAuth(auth);
+        when(ownerRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+    }
+
+    @Test
+    void updatePassword_motDePasseActuelFaux_refuse() {
+        giveOwnerAnAccount();
+        when(passwordEncoder.matches("mauvais", "{bcrypt}old")).thenReturn(false);
+
+        assertThrows(org.springframework.security.authentication.BadCredentialsException.class,
+                () -> ownerService.updatePassword(OWNER_ID, new VacationerPassReqDto("mauvais", "nouveau-mdp-123")));
+        verify(authRepository, never()).save(any());
+    }
+
+    @Test
+    void updatePassword_tropCourt_refuseSansToucherAuCompte() {
+        assertThrows(IllegalArgumentException.class,
+                () -> ownerService.updatePassword(OWNER_ID, new VacationerPassReqDto("actuel", "court")));
+        verifyNoInteractions(passwordEncoder, authRepository);
+    }
+
+    @Test
+    void updatePassword_succes_enregistreLeNouveauHash() {
+        giveOwnerAnAccount();
+        when(passwordEncoder.matches("actuel", "{bcrypt}old")).thenReturn(true);
+        when(passwordEncoder.encode("nouveau-mdp-123")).thenReturn("{bcrypt}new");
+
+        ownerService.updatePassword(OWNER_ID, new VacationerPassReqDto("actuel", "nouveau-mdp-123"));
+
+        assertEquals("{bcrypt}new", owner.getAuth().getPassword());
+        verify(authRepository).save(owner.getAuth());
+    }
+
+    @Test
+    void updateEmail_dejaUtilise_refuse() {
+        giveOwnerAnAccount();
+        when(passwordEncoder.matches("actuel", "{bcrypt}old")).thenReturn(true);
+        when(authRepository.existsByLogin("julie@mail.fr")).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class,
+                () -> ownerService.updateEmail(OWNER_ID, new VacationerMailReqDto("Julie@mail.fr", "actuel")));
+        assertEquals("dupont@mail.fr", owner.getAuth().getLogin());
     }
 
     @Test
