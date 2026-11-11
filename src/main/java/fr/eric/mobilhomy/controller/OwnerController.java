@@ -148,6 +148,18 @@ public class OwnerController {
         return ResponseEntity.ok(ownerService.cancelExternalReservation(ownerId(auth), id));
     }
 
+    // ----- Factures de fonctionnement -----
+
+    @GetMapping("/invoices")
+    public ResponseEntity<List<InvoiceResponseDto>> getInvoices(@AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.getInvoices(ownerId(auth)));
+    }
+
+    @PutMapping("/invoices/{id}/pay")
+    public ResponseEntity<InvoiceResponseDto> payInvoice(@PathVariable Integer id, @AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.payInvoice(ownerId(auth), id));
+    }
+
     // ----- Liens utiles -----
 
     @GetMapping("/links")

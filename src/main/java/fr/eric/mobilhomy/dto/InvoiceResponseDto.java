@@ -16,7 +16,9 @@ public record InvoiceResponseDto(
         BigDecimal amount,
         String date,
         InvoiceCategory category,
-        InvoiceStatus status
+        InvoiceStatus status,
+        /* Gérant qui a saisi la facture (utile au propriétaire, qui peut avoir plusieurs gérants). */
+        @JsonProperty("manager_name") String managerName
 ) {
     public static InvoiceResponseDto fromEntity(Invoice i) {
         Mobilhome m = i.getMobilhome();
@@ -28,7 +30,8 @@ public record InvoiceResponseDto(
                 i.getAmount(),
                 i.getDate() != null ? i.getDate().toString() : null,
                 i.getCategory(),
-                i.getStatus()
+                i.getStatus(),
+                i.getManager() != null ? i.getManager().getFirstname() + " " + i.getManager().getName() : null
         );
     }
 }

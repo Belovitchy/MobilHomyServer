@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.security.authentication.DisabledException;
 
 import java.util.Map;
 
@@ -27,6 +28,13 @@ public class ApiExceptionHandler {
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<Map<String, String>> handleBusinessRule(BusinessRuleException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", ex.getMessage()));
+    }
+
+    /** Bon mot de passe mais compte suspendu par l'administrateur : on l'explique à l'utilisateur. */
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<Map<String, String>> handleDisabled() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("message", "Compte suspendu — contactez l'administrateur"));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

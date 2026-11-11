@@ -53,7 +53,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (userLogin != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(userLogin);
 
-            if (jwtService.isTokenValid(jwt, userDetails)) {
+            // Un jeton encore valide ne suffit pas : si l'administrateur a suspendu le compte entre-temps,
+            // la requête reste anonyme (→ 403 sur les routes protégées).
+            if (jwtService.isTokenValid(jwt, userDetails) && userDetails.isEnabled()) {
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

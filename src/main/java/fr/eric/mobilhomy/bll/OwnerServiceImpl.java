@@ -382,6 +382,32 @@ public class OwnerServiceImpl implements OwnerService {
     }
 
     // =====================================================================
+    // Factures de fonctionnement (saisies par ses gérants)
+    // =====================================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<InvoiceResponseDto> getInvoices(Integer ownerId) {
+        requireId(ownerId);
+        return invoiceRepository.findAllByOwnerId(ownerId).stream().map(InvoiceResponseDto::fromEntity).toList();
+    }
+
+    @Override
+    @Transactional
+    public InvoiceResponseDto payInvoice(Integer ownerId, Integer invoiceId) {
+        requireId(ownerId);
+        requireId(invoiceId);
+        Invoice invoice = invoiceRepository.findByIdAndOwnerId(invoiceId, ownerId)
+                .orElseThrow(() -> new NotFoundException("Facture introuvable"));
+        if (invoice.getStatus() != InvoiceStatus.ISSUED) {
+            throw new BusinessRuleException("Seule une facture en attente peut être marquée payée (statut actuel : "
+                    + invoice.getStatus() + ")");
+        }
+        invoice.setStatus(InvoiceStatus.PAID);
+        return InvoiceResponseDto.fromEntity(invoiceRepository.save(invoice));
+    }
+
+    // =====================================================================
     // Liens utiles (extranet Booking, déclaration Siblu, iCal…)
     // =====================================================================
 

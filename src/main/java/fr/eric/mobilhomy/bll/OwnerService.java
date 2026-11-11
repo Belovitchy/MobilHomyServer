@@ -50,6 +50,12 @@ public interface OwnerService {
     /** Annulation d'une réservation externe (annulée sur la plateforme d'origine, ou saisie par erreur). */
     OwnerReservationResponseDto cancelExternalReservation(Integer ownerId, Integer reservationId);
 
+    // ----- Factures de fonctionnement (saisies par ses gérants) -----
+    List<InvoiceResponseDto> getInvoices(Integer ownerId);
+
+    /** Le propriétaire a réglé la facture : ISSUED → PAID. */
+    InvoiceResponseDto payInvoice(Integer ownerId, Integer invoiceId);
+
     // ----- Liens utiles -----
     List<LinkResponseDto> getLinks(Integer ownerId);
 

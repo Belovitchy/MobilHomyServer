@@ -36,6 +36,10 @@ public interface ReservationRepository extends JpaRepository<Reservation, Intege
     /** Ne renvoie la réservation que si elle porte sur un mobil-home du propriétaire. */
     Optional<Reservation> findByIdAndMobilhomeOwnerId(Integer id, Integer ownerId);
 
+    long countByMobilhomeOwnerId(Integer ownerId);
+
+    long countByStatus(ReservationStatus status);
+
     boolean existsByMobilhomeIdAndStatusIn(Integer mobilhomeId, Collection<ReservationStatus> statuses);
 
     /**

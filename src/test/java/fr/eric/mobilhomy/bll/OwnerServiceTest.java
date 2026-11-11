@@ -270,6 +270,35 @@ class OwnerServiceTest {
     }
 
     // ----------------------------------------------------------------
+    // Factures
+    // ----------------------------------------------------------------
+
+    @Test
+    void payInvoice_enAttente_passeEnPayee() {
+        Invoice inv = Invoice.builder().id(100).owner(owner).mobilhome(mobilhome).status(InvoiceStatus.ISSUED).build();
+        when(invoiceRepository.findByIdAndOwnerId(100, OWNER_ID)).thenReturn(Optional.of(inv));
+        when(invoiceRepository.save(inv)).thenReturn(inv);
+
+        assertEquals(InvoiceStatus.PAID, ownerService.payInvoice(OWNER_ID, 100).status());
+    }
+
+    @Test
+    void payInvoice_annulee_refuse() {
+        Invoice inv = Invoice.builder().id(100).owner(owner).mobilhome(mobilhome).status(InvoiceStatus.CANCELLED).build();
+        when(invoiceRepository.findByIdAndOwnerId(100, OWNER_ID)).thenReturn(Optional.of(inv));
+
+        assertThrows(BusinessRuleException.class, () -> ownerService.payInvoice(OWNER_ID, 100));
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    void payInvoice_dUnAutreProprietaire_renvoieNotFound() {
+        when(invoiceRepository.findByIdAndOwnerId(100, OTHER_OWNER_ID)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> ownerService.payInvoice(OTHER_OWNER_ID, 100));
+    }
+
+    // ----------------------------------------------------------------
     // Liens utiles
     // ----------------------------------------------------------------
 

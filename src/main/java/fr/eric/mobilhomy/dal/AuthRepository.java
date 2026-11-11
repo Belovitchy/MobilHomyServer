@@ -1,6 +1,7 @@
 package fr.eric.mobilhomy.dal;
 
 import fr.eric.mobilhomy.bo.Auth;
+import fr.eric.mobilhomy.bo.RolesEnum;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -12,4 +13,8 @@ public interface AuthRepository extends JpaRepository<Auth, Integer> {
     Optional<Auth> findByLogin(String login);
 
     boolean existsByLogin(String login);
+
+    long countByAuthority(RolesEnum authority);
+
+    long countByAuthorityAndEnabledFalse(RolesEnum authority);
 }

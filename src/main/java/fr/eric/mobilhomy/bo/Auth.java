@@ -44,6 +44,11 @@ public class Auth implements UserDetails {
     @Column(length = 50)
     private RolesEnum authority;
 
+    /** Compte actif. Un administrateur peut suspendre un compte : connexion et jetons existants refusés. */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean enabled = true;
+
     @Override
     @NonNull
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -54,5 +59,11 @@ public class Auth implements UserDetails {
     @NonNull
     public String getUsername() {
         return login;
+    }
+
+    /** Lu par Spring Security (UserDetails) : un compte suspendu ne peut plus s'authentifier. */
+    @Override
+    public boolean isEnabled() {
+        return enabled;
     }
 }

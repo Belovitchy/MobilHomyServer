@@ -262,6 +262,32 @@ class OwnerControllerIntegrationTest {
                 .andExpect(status().isConflict());
     }
 
+    // ----- Factures de fonctionnement -----
+
+    @Test
+    void proprietaire_voitLesFacturesDeSesGerants_etEnRegleUne() throws Exception {
+        Auth owner = account(OWNER_LOGIN);
+
+        String body = mvc.perform(get("/api/owner/invoices").with(user(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].manager_name").exists())
+                .andReturn().getResponse().getContentAsString();
+        Integer issuedId = com.jayway.jsonpath.JsonPath.<java.util.List<Integer>>read(body, "$[?(@.status == 'ISSUED')].id").getFirst();
+
+        mvc.perform(put("/api/owner/invoices/{id}/pay", issuedId).with(user(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAID"));
+        mvc.perform(put("/api/owner/invoices/{id}/pay", issuedId).with(user(owner)))
+                .andExpect(status().isConflict()); // déjà payée
+    }
+
+    @Test
+    void lesFacturesDUnProprietaire_neSontPasVisiblesParUnAutre() throws Exception {
+        mvc.perform(get("/api/owner/invoices").with(user(account("lefevre@mail.fr"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].mobil_home_title", org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("Océane"))));
+    }
+
     // ----- Liens utiles -----
 
     @Test

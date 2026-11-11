@@ -26,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
  *   admin@mail.fr   (admin)       Administrateur
  *   dupont@mail.fr  (owner)       Paul Dupont     — Océane, Azur, Les Pins, Bel Air (sans gérant)
  *   lefevre@mail.fr (owner)       Claire Lefèvre  — Marina, Dune
+ *   petit@mail.fr   (owner)       Marc Petit      — compte SUSPENDU par l'admin (connexion refusée)
  *   marc@mail.fr    (manager)     Marc Durand     — gère Océane et Azur
  *   sarah@mail.fr   (manager)     Sarah Benali    — gère Les Pins (Dupont), Marina et Dune (Lefèvre)
  *   julie@mail.fr, thomas@mail.fr, camille@mail.fr, lucas@mail.fr, ines@mail.fr  (vacationer)
@@ -77,6 +78,11 @@ public class DataSeeder {
                 "dupont@mail.fr", "owner", RolesEnum.OWNER);
         Owner lefevre = (Owner) account(Owner.builder().firstname("Claire").name("Lefèvre").phone("0600000004").build(),
                 "lefevre@mail.fr", "owner", RolesEnum.OWNER);
+        // Compte suspendu par l'administrateur (démo de l'espace admin) : la connexion est refusée.
+        Owner petit = (Owner) account(Owner.builder().firstname("Marc").name("Petit").phone("0600000006").build(),
+                "petit@mail.fr", "owner", RolesEnum.OWNER);
+        petit.getAuth().setEnabled(false);
+        authRepository.save(petit.getAuth());
 
         Manager marc = (Manager) account(Manager.builder().firstname("Marc").name("Durand").phone("0600000002").build(),
                 "marc@mail.fr", "manager", RolesEnum.MANAGER);

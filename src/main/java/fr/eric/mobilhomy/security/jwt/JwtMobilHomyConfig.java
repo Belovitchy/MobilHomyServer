@@ -41,6 +41,11 @@ public class JwtMobilHomyConfig {
                 if (!passwordEncoder.matches(password, user.getPassword())) {
                     throw new BadCredentialsException("Bad credentials");
                 }
+                // Vérifié APRÈS le mot de passe : on ne révèle pas qu'un compte existe et est suspendu
+                // à quelqu'un qui ne connaît pas son mot de passe.
+                if (!user.isEnabled()) {
+                    throw new DisabledException("Compte suspendu");
+                }
                 return new UsernamePasswordAuthenticationToken(user, password, user.getAuthorities());
             }
 
