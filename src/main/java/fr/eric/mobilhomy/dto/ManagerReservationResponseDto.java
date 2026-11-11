@@ -42,8 +42,8 @@ public record ManagerReservationResponseDto(
                 r.getStartDate() != null ? r.getStartDate().toString() : null,
                 r.getEndDate() != null ? r.getEndDate().toString() : null,
                 r.getStatus(),
-                v != null ? v.getFirstname() + " " + v.getName() : null,
-                v != null ? v.getPhone() : null,
+                r.getClientName(),   // vacancier MobilHomy ou client d'une réservation externe
+                r.getClientPhone(),
                 v != null && v.getAuth() != null ? v.getAuth().getLogin() : null,
                 r.getImmat(),
                 occupants.isEmpty() ? r.getNumberOfPerson() : occupants.size(),

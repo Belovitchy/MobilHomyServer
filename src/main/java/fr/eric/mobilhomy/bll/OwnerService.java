@@ -36,6 +36,29 @@ public interface OwnerService {
 
     OwnerReservationResponseDto rejectReservation(Integer ownerId, Integer reservationId);
 
+    /** Enregistre le numéro de réservation Siblu obtenu après déclaration du séjour au camping. */
+    OwnerReservationResponseDto updateSibluRef(Integer ownerId, Integer reservationId, SibluRefRequestDto req);
+
+    // ----- Réservations externes (Booking, Airbnb, Abritel…) -----
+
+    /** Saisie d'une réservation prise sur une autre plateforme : confirmée d'office (VALIDATED). */
+    OwnerReservationResponseDto createExternalReservation(Integer ownerId, ExternalReservationRequestDto req);
+
+    /** Modification du client, de la plaque et des occupants — réservations externes uniquement. */
+    OwnerReservationResponseDto updateReservationDetails(Integer ownerId, Integer reservationId, ReservationDetailsRequestDto req);
+
+    /** Annulation d'une réservation externe (annulée sur la plateforme d'origine, ou saisie par erreur). */
+    OwnerReservationResponseDto cancelExternalReservation(Integer ownerId, Integer reservationId);
+
+    // ----- Liens utiles -----
+    List<LinkResponseDto> getLinks(Integer ownerId);
+
+    LinkResponseDto createLink(Integer ownerId, LinkRequestDto req);
+
+    LinkResponseDto updateLink(Integer ownerId, Integer linkId, LinkRequestDto req);
+
+    void deleteLink(Integer ownerId, Integer linkId);
+
     // ----- Calendrier -----
     List<CalendarEventDto> getCalendar(Integer ownerId, Integer mobilhomeId);
 

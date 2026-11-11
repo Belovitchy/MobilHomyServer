@@ -118,6 +118,60 @@ public class OwnerController {
         return ResponseEntity.ok(ownerService.rejectReservation(ownerId(auth), id));
     }
 
+    @PutMapping("/reservations/{id}/siblu-ref")
+    public ResponseEntity<OwnerReservationResponseDto> updateSibluRef(
+            @PathVariable Integer id,
+            @Valid @RequestBody SibluRefRequestDto req,
+            @AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.updateSibluRef(ownerId(auth), id, req));
+    }
+
+    // ----- Réservations externes (Booking, Airbnb, Abritel…) -----
+
+    @PostMapping("/reservations")
+    public ResponseEntity<OwnerReservationResponseDto> createExternalReservation(
+            @Valid @RequestBody ExternalReservationRequestDto req, @AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ownerService.createExternalReservation(ownerId(auth), req));
+    }
+
+    @PutMapping("/reservations/{id}/details")
+    public ResponseEntity<OwnerReservationResponseDto> updateReservationDetails(
+            @PathVariable Integer id,
+            @Valid @RequestBody ReservationDetailsRequestDto req,
+            @AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.updateReservationDetails(ownerId(auth), id, req));
+    }
+
+    @PutMapping("/reservations/{id}/cancel")
+    public ResponseEntity<OwnerReservationResponseDto> cancelExternalReservation(
+            @PathVariable Integer id, @AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.cancelExternalReservation(ownerId(auth), id));
+    }
+
+    // ----- Liens utiles -----
+
+    @GetMapping("/links")
+    public ResponseEntity<List<LinkResponseDto>> getLinks(@AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.getLinks(ownerId(auth)));
+    }
+
+    @PostMapping("/links")
+    public ResponseEntity<LinkResponseDto> createLink(@Valid @RequestBody LinkRequestDto req, @AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ownerService.createLink(ownerId(auth), req));
+    }
+
+    @PutMapping("/links/{id}")
+    public ResponseEntity<LinkResponseDto> updateLink(
+            @PathVariable Integer id, @Valid @RequestBody LinkRequestDto req, @AuthenticationPrincipal Auth auth) {
+        return ResponseEntity.ok(ownerService.updateLink(ownerId(auth), id, req));
+    }
+
+    @DeleteMapping("/links/{id}")
+    public ResponseEntity<Void> deleteLink(@PathVariable Integer id, @AuthenticationPrincipal Auth auth) {
+        ownerService.deleteLink(ownerId(auth), id);
+        return ResponseEntity.noContent().build();
+    }
+
     // ----- Calendrier -----
 
     @GetMapping("/calendar")

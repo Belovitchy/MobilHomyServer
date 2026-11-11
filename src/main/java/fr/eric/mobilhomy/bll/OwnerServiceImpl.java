@@ -38,6 +38,7 @@ public class OwnerServiceImpl implements OwnerService {
     private final AuthRepository authRepository;
     private final ImageRepository imageRepository;
     private final InvoiceRepository invoiceRepository;
+    private final LinkRepository linkRepository;
     private final PasswordEncoder passwordEncoder;
 
     // =====================================================================
@@ -270,6 +271,155 @@ public class OwnerServiceImpl implements OwnerService {
         requireStatus(r, SUBMITTED, "refuser");
         r.setStatus(ReservationStatus.REJECTED);
         return OwnerReservationResponseDto.fromEntity(reservationRepository.save(r));
+    }
+
+    /**
+     * Le propriétaire déclare le séjour au camping (avec la plaque) une fois la réservation validée,
+     * puis reporte ici le numéro Siblu reçu : il ne peut donc être saisi que sur une réservation VALIDATED.
+     */
+    @Override
+    @Transactional
+    public OwnerReservationResponseDto updateSibluRef(Integer ownerId, Integer reservationId, SibluRefRequestDto req) {
+        Reservation r = getOwnedReservation(ownerId, reservationId);
+        if (r.getStatus() != ReservationStatus.VALIDATED) {
+            throw new BusinessRuleException("Le numéro Siblu ne peut être saisi que sur une réservation validée");
+        }
+        r.setSibluRef(req.sibluRef().trim().toUpperCase());
+        return OwnerReservationResponseDto.fromEntity(reservationRepository.save(r));
+    }
+
+    // =====================================================================
+    // Réservations externes (Booking, Airbnb, Abritel…)
+    // =====================================================================
+
+    @Override
+    @Transactional
+    public OwnerReservationResponseDto createExternalReservation(Integer ownerId, ExternalReservationRequestDto req) {
+        if (req.source() == ReservationSource.MOBILHOMY) {
+            throw new IllegalArgumentException("Une réservation externe doit venir d'une autre plateforme");
+        }
+        Mobilhome m = getOwnedMobilhome(ownerId, req.mobilhomeId());
+        if (!req.startDate().isBefore(req.endDate())) {
+            throw new IllegalArgumentException("La date de départ doit être après la date d'arrivée");
+        }
+        checkCapacity(m, req.occupants());
+        // Même garde-fou que pour une demande MobilHomy : pas de double réservation.
+        if (reservationRepository.existsOverlap(m.getId(), -1, ReservationStatus.VALIDATED, req.startDate(), req.endDate())) {
+            throw new BusinessRuleException("Le mobil-home est déjà réservé sur tout ou partie de cette période");
+        }
+
+        Reservation r = Reservation.builder()
+                .mobilhome(m)
+                .source(req.source())
+                .guestName(req.guestName().trim())
+                .guestPhone(trimToNull(req.guestPhone()))
+                .startDate(req.startDate())
+                .endDate(req.endDate())
+                .immat(normalizeImmat(req.immat()))
+                .status(ReservationStatus.VALIDATED) // déjà payée sur la plateforme d'origine
+                .build();
+        replaceOccupants(r, req.occupants());
+        return OwnerReservationResponseDto.fromEntity(reservationRepository.save(r));
+    }
+
+    @Override
+    @Transactional
+    public OwnerReservationResponseDto updateReservationDetails(Integer ownerId, Integer reservationId,
+                                                               ReservationDetailsRequestDto req) {
+        Reservation r = getOwnedReservation(ownerId, reservationId);
+        requireExternal(r);
+        if (r.getStatus() == ReservationStatus.CANCELLED) {
+            throw new BusinessRuleException("Réservation annulée : modification impossible");
+        }
+        checkCapacity(r.getMobilhome(), req.occupants());
+        r.setGuestName(req.guestName().trim());
+        r.setGuestPhone(trimToNull(req.guestPhone()));
+        r.setImmat(normalizeImmat(req.immat()));
+        replaceOccupants(r, req.occupants());
+        return OwnerReservationResponseDto.fromEntity(reservationRepository.save(r));
+    }
+
+    @Override
+    @Transactional
+    public OwnerReservationResponseDto cancelExternalReservation(Integer ownerId, Integer reservationId) {
+        Reservation r = getOwnedReservation(ownerId, reservationId);
+        requireExternal(r);
+        if (r.getStatus() != ReservationStatus.VALIDATED) {
+            throw new BusinessRuleException("Impossible d'annuler une réservation au statut " + r.getStatus());
+        }
+        r.setStatus(ReservationStatus.CANCELLED);
+        return OwnerReservationResponseDto.fromEntity(reservationRepository.save(r));
+    }
+
+    /** Les données d'une réservation MobilHomy appartiennent au vacancier : le propriétaire ne les modifie pas. */
+    private static void requireExternal(Reservation r) {
+        if (!r.isExternal()) {
+            throw new BusinessRuleException("Seules les réservations externes sont modifiables par le propriétaire");
+        }
+    }
+
+    private static void checkCapacity(Mobilhome m, List<OwnerOccupantDto> occupants) {
+        if (occupants != null && m.getCapacity() > 0 && occupants.size() > m.getCapacity()) {
+            throw new BusinessRuleException("Trop d'occupants : ce mobil-home accueille " + m.getCapacity() + " personnes maximum");
+        }
+    }
+
+    private static void replaceOccupants(Reservation r, List<OwnerOccupantDto> occupants) {
+        r.getOccupants().clear(); // orphanRemoval : les anciens occupants sont supprimés
+        if (occupants != null) {
+            occupants.forEach(o -> r.getOccupants().add(Occupant.builder()
+                    .firstname(o.firstname().trim())
+                    .name(o.name().trim())
+                    .age(o.age())
+                    .reservation(r)
+                    .build()));
+        }
+        r.setNumberOfPerson(r.getOccupants().size());
+    }
+
+    private static String normalizeImmat(String immat) {
+        return immat == null || immat.isBlank() ? null : immat.trim().toUpperCase();
+    }
+
+    // =====================================================================
+    // Liens utiles (extranet Booking, déclaration Siblu, iCal…)
+    // =====================================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LinkResponseDto> getLinks(Integer ownerId) {
+        requireId(ownerId);
+        return linkRepository.findByOwnerIdOrderByNameAsc(ownerId).stream().map(LinkResponseDto::fromEntity).toList();
+    }
+
+    @Override
+    @Transactional
+    public LinkResponseDto createLink(Integer ownerId, LinkRequestDto req) {
+        Owner owner = getOwner(ownerId);
+        Link link = Link.builder().owner(owner).name(req.name().trim()).url(req.url().trim()).build();
+        return LinkResponseDto.fromEntity(linkRepository.save(link));
+    }
+
+    @Override
+    @Transactional
+    public LinkResponseDto updateLink(Integer ownerId, Integer linkId, LinkRequestDto req) {
+        Link link = getOwnedLink(ownerId, linkId);
+        link.setName(req.name().trim());
+        link.setUrl(req.url().trim());
+        return LinkResponseDto.fromEntity(linkRepository.save(link));
+    }
+
+    @Override
+    @Transactional
+    public void deleteLink(Integer ownerId, Integer linkId) {
+        linkRepository.delete(getOwnedLink(ownerId, linkId));
+    }
+
+    private Link getOwnedLink(Integer ownerId, Integer linkId) {
+        requireId(ownerId);
+        requireId(linkId);
+        return linkRepository.findByIdAndOwnerId(linkId, ownerId)
+                .orElseThrow(() -> new NotFoundException("Lien introuvable"));
     }
 
     private Reservation getOwnedReservation(Integer ownerId, Integer reservationId) {

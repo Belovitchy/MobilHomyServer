@@ -18,7 +18,7 @@ public record CalendarEventDto(
         String source
 ) {
     public static CalendarEventDto fromReservation(Reservation r) {
-        String who = r.getVacationer() != null ? r.getVacationer().getName() : "Réservation";
+        String who = r.getClientName() != null ? r.getClientName() : "Réservation";
         return new CalendarEventDto(
                 r.getId(),
                 r.getMobilhome().getId(),

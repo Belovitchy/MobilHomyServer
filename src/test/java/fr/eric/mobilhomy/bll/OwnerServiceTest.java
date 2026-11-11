@@ -6,6 +6,11 @@ import fr.eric.mobilhomy.dto.OwnerManagerRequestDto;
 import fr.eric.mobilhomy.dto.OwnerMobilhomeRequestDto;
 import fr.eric.mobilhomy.dto.OwnerMobilhomeResponseDto;
 import fr.eric.mobilhomy.dto.OwnerReservationResponseDto;
+import fr.eric.mobilhomy.dto.SibluRefRequestDto;
+import fr.eric.mobilhomy.dto.ExternalReservationRequestDto;
+import fr.eric.mobilhomy.dto.ReservationDetailsRequestDto;
+import fr.eric.mobilhomy.dto.OwnerOccupantDto;
+import fr.eric.mobilhomy.dto.LinkRequestDto;
 import fr.eric.mobilhomy.dto.VacationerMailReqDto;
 import fr.eric.mobilhomy.dto.VacationerPassReqDto;
 import fr.eric.mobilhomy.exception.BusinessRuleException;
@@ -45,6 +50,7 @@ class OwnerServiceTest {
     @Mock private AuthRepository authRepository;
     @Mock private ImageRepository imageRepository;
     @Mock private InvoiceRepository invoiceRepository;
+    @Mock private LinkRepository linkRepository;
     @Mock private PasswordEncoder passwordEncoder;
 
     @InjectMocks
@@ -142,6 +148,149 @@ class OwnerServiceTest {
         OwnerReservationResponseDto res = ownerService.rejectReservation(OWNER_ID, 50);
 
         assertEquals(ReservationStatus.REJECTED, res.status());
+    }
+
+    // ----------------------------------------------------------------
+    // Numéro Siblu (déclaration au camping)
+    // ----------------------------------------------------------------
+
+    @Test
+    void updateSibluRef_reservationValidee_enregistreLeNumeroNormalise() {
+        Reservation r = reservation(ReservationStatus.VALIDATED);
+        r.setImmat("AA-123-BB");
+        when(reservationRepository.findByIdAndMobilhomeOwnerId(50, OWNER_ID)).thenReturn(Optional.of(r));
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(i -> i.getArgument(0));
+
+        OwnerReservationResponseDto res = ownerService.updateSibluRef(OWNER_ID, 50, new SibluRefRequestDto("  sblu-res-10421 "));
+
+        assertEquals("SBLU-RES-10421", res.sibluRef());
+        assertEquals("AA-123-BB", res.immat()); // la plaque est visible : elle sert à la déclaration
+    }
+
+    @Test
+    void updateSibluRef_demandeNonValidee_refuse() {
+        Reservation r = reservation(ReservationStatus.COMPLETED);
+        when(reservationRepository.findByIdAndMobilhomeOwnerId(50, OWNER_ID)).thenReturn(Optional.of(r));
+
+        assertThrows(BusinessRuleException.class,
+                () -> ownerService.updateSibluRef(OWNER_ID, 50, new SibluRefRequestDto("SBLU-1")));
+        assertNull(r.getSibluRef());
+        verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
+    void updateSibluRef_dUnAutreProprietaire_renvoieNotFound() {
+        when(reservationRepository.findByIdAndMobilhomeOwnerId(50, OTHER_OWNER_ID)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class,
+                () -> ownerService.updateSibluRef(OTHER_OWNER_ID, 50, new SibluRefRequestDto("SBLU-1")));
+    }
+
+    // ----------------------------------------------------------------
+    // Réservations externes (Booking, Airbnb…)
+    // ----------------------------------------------------------------
+
+    private ExternalReservationRequestDto external(ReservationSource source, int occupants) {
+        List<OwnerOccupantDto> list = java.util.stream.IntStream.range(0, occupants)
+                .mapToObj(i -> new OwnerOccupantDto(" Prénom" + i, "Roux ", 30)).toList();
+        return new ExternalReservationRequestDto(10, source, " Nathalie Roux ", "", LocalDate.of(2027, 7, 1),
+                LocalDate.of(2027, 7, 8), "nr-318-bk", list);
+    }
+
+    @Test
+    void createExternalReservation_confirmeeDOffice_avecOccupantsEtPlaqueNormalisee() {
+        when(mobilhomeRepository.findByIdAndOwnerId(10, OWNER_ID)).thenReturn(Optional.of(mobilhome));
+        when(reservationRepository.existsOverlap(eq(10), eq(-1), eq(ReservationStatus.VALIDATED), any(), any())).thenReturn(false);
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(i -> i.getArgument(0));
+
+        OwnerReservationResponseDto res = ownerService.createExternalReservation(OWNER_ID, external(ReservationSource.BOOKING, 3));
+
+        assertEquals(ReservationStatus.VALIDATED, res.status());
+        assertEquals(ReservationSource.BOOKING, res.source());
+        assertEquals("Nathalie Roux", res.occupantName());
+        assertEquals("NR-318-BK", res.immat());
+        assertEquals(3, res.occupantsCount());
+        assertEquals("Prénom0", res.occupants().getFirst().firstname());
+        assertNull(res.guestPhone()); // chaîne vide → null
+    }
+
+    @Test
+    void createExternalReservation_sourceMobilhomy_refusee() {
+        assertThrows(IllegalArgumentException.class,
+                () -> ownerService.createExternalReservation(OWNER_ID, external(ReservationSource.MOBILHOMY, 1)));
+        verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
+    void createExternalReservation_chevauchement_refuse() {
+        when(mobilhomeRepository.findByIdAndOwnerId(10, OWNER_ID)).thenReturn(Optional.of(mobilhome));
+        when(reservationRepository.existsOverlap(eq(10), eq(-1), eq(ReservationStatus.VALIDATED), any(), any())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class,
+                () -> ownerService.createExternalReservation(OWNER_ID, external(ReservationSource.BOOKING, 2)));
+        verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
+    void createExternalReservation_plusDOccupantsQueDeCouchages_refuse() {
+        when(mobilhomeRepository.findByIdAndOwnerId(10, OWNER_ID)).thenReturn(Optional.of(mobilhome)); // capacité 6
+
+        assertThrows(BusinessRuleException.class,
+                () -> ownerService.createExternalReservation(OWNER_ID, external(ReservationSource.AIRBNB, 7)));
+    }
+
+    @Test
+    void updateReservationDetails_reservationMobilhomy_refuse() {
+        Reservation r = reservation(ReservationStatus.VALIDATED); // source MOBILHOMY par défaut
+        when(reservationRepository.findByIdAndMobilhomeOwnerId(50, OWNER_ID)).thenReturn(Optional.of(r));
+
+        assertThrows(BusinessRuleException.class, () -> ownerService.updateReservationDetails(OWNER_ID, 50,
+                new ReservationDetailsRequestDto("X", null, "AA-123-BB", List.of())));
+        verify(reservationRepository, never()).save(any());
+    }
+
+    @Test
+    void updateReservationDetails_reservationExterne_remplaceLesOccupants() {
+        Reservation r = reservation(ReservationStatus.VALIDATED);
+        r.setSource(ReservationSource.BOOKING);
+        r.setVacationer(null);
+        r.getOccupants().add(Occupant.builder().firstname("Ancien").name("Occupant").age(50).reservation(r).build());
+        when(reservationRepository.findByIdAndMobilhomeOwnerId(50, OWNER_ID)).thenReturn(Optional.of(r));
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(i -> i.getArgument(0));
+
+        OwnerReservationResponseDto res = ownerService.updateReservationDetails(OWNER_ID, 50,
+                new ReservationDetailsRequestDto("Kevin Laurent", "0600000099", "kl-555-bk",
+                        List.of(new OwnerOccupantDto("Kevin", "Laurent", 33), new OwnerOccupantDto("Léa", "Laurent", 31))));
+
+        assertEquals(2, res.occupantsCount());
+        assertEquals("KL-555-BK", res.immat());
+        assertEquals("Kevin Laurent", res.occupantName());
+        assertEquals("0600000099", res.guestPhone());
+        assertTrue(r.getOccupants().stream().noneMatch(o -> "Ancien".equals(o.getFirstname())));
+    }
+
+    // ----------------------------------------------------------------
+    // Liens utiles
+    // ----------------------------------------------------------------
+
+    @Test
+    void updateLink_dUnAutreProprietaire_renvoieNotFound() {
+        when(linkRepository.findByIdAndOwnerId(9, OTHER_OWNER_ID)).thenReturn(Optional.empty());
+
+        assertThrows(NotFoundException.class,
+                () -> ownerService.updateLink(OTHER_OWNER_ID, 9, new LinkRequestDto("Booking", "https://admin.booking.com/")));
+        verify(linkRepository, never()).save(any());
+    }
+
+    @Test
+    void createLink_rattacheLeLienAuProprietaire() {
+        when(ownerRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+        when(linkRepository.save(any(Link.class))).thenAnswer(i -> i.getArgument(0));
+
+        ownerService.createLink(OWNER_ID, new LinkRequestDto(" Déclaration Siblu ", "https://www.siblu.fr/ "));
+
+        verify(linkRepository).save(argThat(l -> l.getOwner() == owner
+                && "Déclaration Siblu".equals(l.getName()) && "https://www.siblu.fr/".equals(l.getUrl())));
     }
 
     // ----------------------------------------------------------------

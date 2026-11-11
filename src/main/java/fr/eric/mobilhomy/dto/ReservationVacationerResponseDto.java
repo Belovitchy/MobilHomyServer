@@ -1,5 +1,7 @@
 package fr.eric.mobilhomy.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import fr.eric.mobilhomy.bo.Occupant;
 import fr.eric.mobilhomy.bo.Reservation;
 import fr.eric.mobilhomy.bo.ReservationStatus;
@@ -14,6 +16,7 @@ public record ReservationVacationerResponseDto(
         String  end_date,
         ReservationStatus status,
         String immat,
+        @JsonProperty("siblu_ref") String sibluRef,
         List<OccupantResponseDto> occupants,
         ManagerResponseDto manager
 
@@ -28,6 +31,8 @@ public record ReservationVacationerResponseDto(
                 reservation.getEndDate().toString(),
                 reservation.getStatus(),
                 reservation.getImmat(),
+                // Numéro de réservation camping : communiqué au vacancier uniquement si le séjour est confirmé
+                reservation.getStatus() == ReservationStatus.VALIDATED ? reservation.getSibluRef() : null,
                 reservation.getOccupants() !=null ?
                         reservation.getOccupants().stream()
                                 .map(OccupantResponseDto::fromOccupant)

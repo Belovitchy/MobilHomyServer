@@ -2,6 +2,7 @@ package fr.eric.mobilhomy.controller;
 
 import fr.eric.mobilhomy.bo.*;
 import fr.eric.mobilhomy.dal.AuthRepository;
+import fr.eric.mobilhomy.dal.LinkRepository;
 import fr.eric.mobilhomy.dal.MobilhomeRepository;
 import fr.eric.mobilhomy.dal.ReservationRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +42,7 @@ class OwnerControllerIntegrationTest {
     @Autowired private AuthRepository authRepository;
     @Autowired private ReservationRepository reservationRepository;
     @Autowired private MobilhomeRepository mobilhomeRepository;
+    @Autowired private LinkRepository linkRepository;
     @Autowired private PasswordEncoder passwordEncoder;
 
     private MockMvc mvc;
@@ -129,6 +131,162 @@ class OwnerControllerIntegrationTest {
                 .andExpect(jsonPath("$.message").exists());
     }
 
+    // ----- Déclaration camping : plaque visible, numéro Siblu saisi après validation -----
+
+    /** Séjour validé de Dupont encore sans numéro Siblu (seed : Thomas sur Océane, à venir). */
+    private Reservation validatedWithoutSiblu() {
+        return reservationRepository.findAll().stream()
+                .filter(r -> r.getStatus() == ReservationStatus.VALIDATED && r.getSibluRef() == null)
+                .filter(r -> r.getVacationer() != null) // réservation MobilHomy (le vacancier doit voir le n°)
+                .filter(r -> r.getMobilhome().getOwner().getAuth() != null
+                        && OWNER_LOGIN.equals(r.getMobilhome().getOwner().getAuth().getLogin()))
+                .findFirst().orElseThrow();
+    }
+
+    @Test
+    void proprietaire_voitLaPlaquePourLaDeclarationCamping() throws Exception {
+        mvc.perform(get("/api/owner/reservations").with(user(account(OWNER_LOGIN))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].immat").exists())
+                .andExpect(jsonPath("$[0].siblu_ref").hasJsonPath());
+    }
+
+    @Test
+    void proprietaire_renseigneLeNumeroSiblu_quiDevientVisiblePourLeVacancier() throws Exception {
+        Reservation r = validatedWithoutSiblu();
+        Auth vacationer = r.getVacationer().getAuth();
+
+        mvc.perform(put("/api/owner/reservations/{id}/siblu-ref", r.getId())
+                        .with(user(account(OWNER_LOGIN)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"siblu_ref\": \"sblu-res-99999\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.siblu_ref").value("SBLU-RES-99999"));
+
+        mvc.perform(get("/api/vacationer/reservations/mine").with(user(vacationer)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == " + r.getId() + ")].siblu_ref").value("SBLU-RES-99999"));
+    }
+
+    @Test
+    void numeroSiblu_surUneDemandeNonValidee_renvoie409() throws Exception {
+        mvc.perform(put("/api/owner/reservations/{id}/siblu-ref", submittedReservation().getId())
+                        .with(user(account(OWNER_LOGIN)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"siblu_ref\": \"SBLU-1\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void numeroSiblu_invalide_renvoie400() throws Exception {
+        mvc.perform(put("/api/owner/reservations/{id}/siblu-ref", validatedWithoutSiblu().getId())
+                        .with(user(account(OWNER_LOGIN)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"siblu_ref\": \"<script>\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void vacancier_neVoitPasLeNumeroSibluTantQueLaReservationNEstPasValidee() throws Exception {
+        Reservation demande = submittedReservation();
+        demande.setSibluRef("SBLU-PREMATURE"); // cas anormal simulé directement en base
+        reservationRepository.saveAndFlush(demande);
+
+        mvc.perform(get("/api/vacationer/reservations/mine").with(user(demande.getVacationer().getAuth())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == " + demande.getId() + ")].siblu_ref").value(org.hamcrest.Matchers.contains((Object) null)));
+    }
+
+    // ----- Réservations externes (Booking, Airbnb…) saisies par le propriétaire -----
+
+    private Integer mobilhomeId(String name) {
+        return mobilhomeRepository.findAll().stream().filter(m -> name.equals(m.getName())).findFirst().orElseThrow().getId();
+    }
+
+    @Test
+    void proprietaire_saisitUneReservationBooking_confirmeeDOffice() throws Exception {
+        String body = """
+                {"mobil_home_id": %d, "source": "BOOKING", "guest_name": "Marie Blanc", "guest_phone": "0612121212",
+                 "start_date": "2030-07-01", "end_date": "2030-07-08", "immat": "mb-123-bk",
+                 "occupants": [{"firstname": "Marie", "name": "Blanc", "age": 40}, {"firstname": "Tom", "name": "Blanc", "age": 8}]}
+                """.formatted(mobilhomeId("Azur"));
+
+        mvc.perform(post("/api/owner/reservations").with(user(account(OWNER_LOGIN)))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("VALIDATED"))
+                .andExpect(jsonPath("$.source").value("BOOKING"))
+                .andExpect(jsonPath("$.occupant_name").value("Marie Blanc"))
+                .andExpect(jsonPath("$.immat").value("MB-123-BK"))
+                .andExpect(jsonPath("$.occupants_count").value(2));
+    }
+
+    @Test
+    void reservationExterne_surUnePeriodeDejaReservee_renvoie409() throws Exception {
+        Reservation validee = reservationRepository.findAll().stream()
+                .filter(r -> r.getStatus() == ReservationStatus.VALIDATED && "Azur".equals(r.getMobilhome().getName()))
+                .findFirst().orElseThrow();
+        String body = """
+                {"mobil_home_id": %d, "source": "AIRBNB", "guest_name": "Doublon", "start_date": "%s", "end_date": "%s", "occupants": []}
+                """.formatted(validee.getMobilhome().getId(), validee.getStartDate(), validee.getEndDate());
+
+        mvc.perform(post("/api/owner/reservations").with(user(account(OWNER_LOGIN)))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void proprietaire_completeLesOccupantsEtLaPlaqueDUneReservationExterne() throws Exception {
+        // Seed : réservation Booking de Kevin Laurent sur Océane, sans plaque ni occupants.
+        Reservation kevin = reservationRepository.findAll().stream()
+                .filter(r -> "Kevin Laurent".equals(r.getGuestName())).findFirst().orElseThrow();
+        String body = """
+                {"guest_name": "Kevin Laurent", "immat": "kl-555-bk",
+                 "occupants": [{"firstname": "Kevin", "name": "Laurent", "age": 33}, {"firstname": "Léa", "name": "Laurent", "age": 31}]}
+                """;
+
+        mvc.perform(put("/api/owner/reservations/{id}/details", kevin.getId()).with(user(account(OWNER_LOGIN)))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.immat").value("KL-555-BK"))
+                .andExpect(jsonPath("$.occupants.length()").value(2));
+    }
+
+    @Test
+    void proprietaire_nePeutPasModifierLesOccupantsDUneReservationMobilhomy() throws Exception {
+        String body = "{\"guest_name\": \"X\", \"immat\": \"AA-123-BB\", \"occupants\": []}";
+
+        mvc.perform(put("/api/owner/reservations/{id}/details", validatedWithoutSiblu().getId())
+                        .with(user(account(OWNER_LOGIN)))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict());
+    }
+
+    // ----- Liens utiles -----
+
+    @Test
+    void proprietaire_gereSesLiens() throws Exception {
+        Auth owner = account(OWNER_LOGIN);
+
+        mvc.perform(get("/api/owner/links").with(user(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].name", org.hamcrest.Matchers.hasItem("Déclaration Siblu")));
+
+        mvc.perform(post("/api/owner/links").with(user(owner))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"Abritel\", \"url\": \"https://www.abritel.fr/\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").exists());
+    }
+
+    @Test
+    void lien_javascript_refuse() throws Exception {
+        mvc.perform(post("/api/owner/links").with(user(account(OWNER_LOGIN)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"Piège\", \"url\": \"javascript:alert(1)\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void creationMobilhome_invalide_renvoie400() throws Exception {
         String invalide = "{\"title\":\"\",\"address\":\"\",\"postal_code\":\"ABC\",\"capacity\":0,\"price\":-5}";
@@ -195,6 +353,11 @@ class OwnerControllerIntegrationTest {
                 .andExpect(status().isNotFound());
 
         mvc.perform(delete("/api/owner/mobilhomes/{id}", r.getMobilhome().getId()).with(user(other)))
+                .andExpect(status().isNotFound());
+
+        Integer dupontLinkId = linkRepository.findByOwnerIdOrderByNameAsc(
+                account(OWNER_LOGIN).getUtilisateur().getId()).getFirst().getId();
+        mvc.perform(delete("/api/owner/links/{id}", dupontLinkId).with(user(other)))
                 .andExpect(status().isNotFound());
     }
 }

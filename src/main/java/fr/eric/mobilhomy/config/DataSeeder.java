@@ -30,9 +30,13 @@ import lombok.extern.slf4j.Slf4j;
  *   sarah@mail.fr   (manager)     Sarah Benali    — gère Les Pins (Dupont), Marina et Dune (Lefèvre)
  *   julie@mail.fr, thomas@mail.fr, camille@mail.fr, lucas@mail.fr, ines@mail.fr  (vacationer)
  *
- * Scénarios de démo (propriétaire Dupont, onglet « À traiter »)
- *   - Azur, Inès : demande validable sans conflit
- *   - Océane, Lucas : demande qui CHEVAUCHE le séjour validé de Thomas → la validation renvoie 409
+ * Scénarios de démo (propriétaire Dupont)
+ *   - « À traiter » / Azur, Inès : demande validable sans conflit
+ *   - « À traiter » / Océane, Lucas : demande qui CHEVAUCHE le séjour validé de Thomas → la validation renvoie 409
+ *   - « Validées » : réservations Booking/Airbnb saisies par le propriétaire (dont une à compléter :
+ *     Kevin Laurent sur Océane, sans plaque ni occupants) ;
+ *   - « Validées » : séjours passés et en cours déjà déclarés au camping (n° Siblu renseigné) ;
+ *     séjours à venir (Thomas sur Océane, Inès sur Les Pins…) avec le n° Siblu encore à saisir
  * </pre>
  */
 @Slf4j
@@ -89,6 +93,10 @@ public class DataSeeder {
         linkRepository.save(Link.builder().owner(dupont).name("Booking").url("https://ical.booking.com/v1/export?t=XXXX").build());
         linkRepository.save(Link.builder().owner(dupont).name("Airbnb").url("https://www.airbnb.fr/calendar/ical/XXXX.ics").build());
         linkRepository.save(Link.builder().owner(lefevre).name("Abritel").url("https://www.abritel.fr/icalendar/XXXX.ics").build());
+        // Liens d'usage courant, affichés dans le menu du propriétaire (ouverts dans un nouvel onglet)
+        linkRepository.save(Link.builder().owner(dupont).name("Extranet Booking").url("https://admin.booking.com/").build());
+        linkRepository.save(Link.builder().owner(dupont).name("Déclaration Siblu").url("https://www.siblu.fr/").build());
+        linkRepository.save(Link.builder().owner(lefevre).name("Déclaration Siblu").url("https://www.siblu.fr/").build());
 
         // ── 3. GÉRANTS rattachés aux propriétaires ─────────────────────────────────────────────────
         ownerManagerRepository.save(OwnerManager.builder().owner(dupont).manager(marc).build());
@@ -121,45 +129,46 @@ public class DataSeeder {
 
         // ── 5. RÉSERVATIONS ─────────────────────────────────────────────────────────────────────────
         // a) Saison d'été passée : alimente le tableau de bord (taux d'occupation par semaine)
-        resa(camille, oceane, LocalDate.of(season, 7, 5), 7, ReservationStatus.VALIDATED, "CA-512-PT",
-                occ("Camille", "Petit", 34), occ("Hugo", "Petit", 36), occ("Zoé", "Petit", 6));
-        resa(julie, oceane, LocalDate.of(season, 7, 12), 7, ReservationStatus.VALIDATED, "AA-123-BB",
-                occ("Julie", "Martin", 38), occ("Antoine", "Martin", 40), occ("Léo", "Martin", 10), occ("Emma", "Martin", 7));
-        resa(thomas, oceane, LocalDate.of(season, 7, 26), 7, ReservationStatus.VALIDATED, "TB-404-RN",
-                occ("Thomas", "Bernard", 45), occ("Nadia", "Bernard", 43));
-        resa(lucas, oceane, LocalDate.of(season, 8, 9), 7, ReservationStatus.VALIDATED, "LM-777-OR",
-                occ("Lucas", "Moreau", 29), occ("Sarah", "Moreau", 28));
-        resa(ines, azur, LocalDate.of(season, 7, 12), 7, ReservationStatus.VALIDATED, "IG-210-AZ",
-                occ("Inès", "Garcia", 31), occ("Pablo", "Garcia", 4));
-        resa(julie, azur, LocalDate.of(season, 8, 2), 7, ReservationStatus.VALIDATED, "AA-123-BB",
-                occ("Julie", "Martin", 38), occ("Antoine", "Martin", 40));
-        resa(camille, azur, LocalDate.of(season, 8, 16), 7, ReservationStatus.VALIDATED, "CA-512-PT",
-                occ("Camille", "Petit", 34), occ("Zoé", "Petit", 6));
-        resa(thomas, pins, LocalDate.of(season, 7, 19), 7, ReservationStatus.VALIDATED, "TB-404-RN",
+        siblu(resa(camille, oceane, LocalDate.of(season, 7, 5), 7, ReservationStatus.VALIDATED, "CA-512-PT",
+                occ("Camille", "Petit", 34), occ("Hugo", "Petit", 36), occ("Zoé", "Petit", 6)), "SBLU-ETE-001");
+        siblu(resa(julie, oceane, LocalDate.of(season, 7, 12), 7, ReservationStatus.VALIDATED, "AA-123-BB",
+                occ("Julie", "Martin", 38), occ("Antoine", "Martin", 40), occ("Léo", "Martin", 10), occ("Emma", "Martin", 7)), "SBLU-ETE-002");
+        siblu(resa(thomas, oceane, LocalDate.of(season, 7, 26), 7, ReservationStatus.VALIDATED, "TB-404-RN",
+                occ("Thomas", "Bernard", 45), occ("Nadia", "Bernard", 43)), "SBLU-ETE-003");
+        siblu(resa(lucas, oceane, LocalDate.of(season, 8, 9), 7, ReservationStatus.VALIDATED, "LM-777-OR",
+                occ("Lucas", "Moreau", 29), occ("Sarah", "Moreau", 28)), "SBLU-ETE-004");
+        siblu(resa(ines, azur, LocalDate.of(season, 7, 12), 7, ReservationStatus.VALIDATED, "IG-210-AZ",
+                occ("Inès", "Garcia", 31), occ("Pablo", "Garcia", 4)), "SBLU-ETE-005");
+        siblu(resa(julie, azur, LocalDate.of(season, 8, 2), 7, ReservationStatus.VALIDATED, "AA-123-BB",
+                occ("Julie", "Martin", 38), occ("Antoine", "Martin", 40)), "SBLU-ETE-006");
+        siblu(resa(camille, azur, LocalDate.of(season, 8, 16), 7, ReservationStatus.VALIDATED, "CA-512-PT",
+                occ("Camille", "Petit", 34), occ("Zoé", "Petit", 6)), "SBLU-ETE-007");
+        siblu(resa(thomas, pins, LocalDate.of(season, 7, 19), 7, ReservationStatus.VALIDATED, "TB-404-RN",
                 occ("Thomas", "Bernard", 45), occ("Nadia", "Bernard", 43), occ("Jules", "Bernard", 14),
-                occ("Lina", "Bernard", 12), occ("Max", "Bernard", 9));
-        resa(lucas, marina, LocalDate.of(season, 7, 5), 7, ReservationStatus.VALIDATED, "LM-777-OR",
-                occ("Lucas", "Moreau", 29));
-        resa(ines, marina, LocalDate.of(season, 8, 2), 14, ReservationStatus.VALIDATED, "IG-210-AZ",
-                occ("Inès", "Garcia", 31), occ("Pablo", "Garcia", 4));
-        resa(julie, dune, LocalDate.of(season, 7, 26), 14, ReservationStatus.VALIDATED, "AA-123-BB",
-                occ("Julie", "Martin", 38), occ("Léo", "Martin", 10));
+                occ("Lina", "Bernard", 12), occ("Max", "Bernard", 9)), "SBLU-ETE-008");
+        siblu(resa(lucas, marina, LocalDate.of(season, 7, 5), 7, ReservationStatus.VALIDATED, "LM-777-OR",
+                occ("Lucas", "Moreau", 29)), "SBLU-ETE-009");
+        siblu(resa(ines, marina, LocalDate.of(season, 8, 2), 14, ReservationStatus.VALIDATED, "IG-210-AZ",
+                occ("Inès", "Garcia", 31), occ("Pablo", "Garcia", 4)), "SBLU-ETE-010");
+        siblu(resa(julie, dune, LocalDate.of(season, 7, 26), 14, ReservationStatus.VALIDATED, "AA-123-BB",
+                occ("Julie", "Martin", 38), occ("Léo", "Martin", 10)), "SBLU-ETE-011");
 
         // b) Autour d'aujourd'hui : séjour en cours, arrivée du jour, à venir, demandes, historique
         // Océane (Marc)
-        resa(julie, oceane, today.minusDays(3), 7, ReservationStatus.VALIDATED, "AA-123-BB",       // en cours
-                occ("Julie", "Martin", 38), occ("Antoine", "Martin", 40), occ("Léo", "Martin", 10), occ("Emma", "Martin", 7));
-        resa(thomas, oceane, today.plusDays(20), 7, ReservationStatus.VALIDATED, "TB-404-RN",       // à venir
+        siblu(resa(julie, oceane, today.minusDays(3), 7, ReservationStatus.VALIDATED, "AA-123-BB", // en cours, déclaré
+                occ("Julie", "Martin", 38), occ("Antoine", "Martin", 40), occ("Léo", "Martin", 10), occ("Emma", "Martin", 7)),
+                "SBLU-RES-10421");
+        resa(thomas, oceane, today.plusDays(20), 7, ReservationStatus.VALIDATED, "TB-404-RN",       // à venir, n° Siblu à saisir
                 occ("Thomas", "Bernard", 45), occ("Nadia", "Bernard", 43));
         resa(lucas, oceane, today.plusDays(22), 7, ReservationStatus.COMPLETED, "LM-777-OR",       // ⚠ chevauche Thomas
                 occ("Lucas", "Moreau", 29), occ("Sarah", "Moreau", 28));
-        resa(camille, oceane, today.minusDays(25), 7, ReservationStatus.VALIDATED, "CA-512-PT",    // passé récent
-                occ("Camille", "Petit", 34), occ("Zoé", "Petit", 6));
+        siblu(resa(camille, oceane, today.minusDays(25), 7, ReservationStatus.VALIDATED, "CA-512-PT", // passé récent
+                occ("Camille", "Petit", 34), occ("Zoé", "Petit", 6)), "SBLU-RES-10388");
         resa(julie, oceane, today.plusDays(60), 7, ReservationStatus.PENDING, null);                // brouillon
 
         // Azur (Marc)
-        resa(thomas, azur, today, 7, ReservationStatus.VALIDATED, "TB-404-RN",                     // arrivée du jour
-                occ("Thomas", "Bernard", 45), occ("Jules", "Bernard", 14));
+        siblu(resa(thomas, azur, today, 7, ReservationStatus.VALIDATED, "TB-404-RN",               // arrivée du jour
+                occ("Thomas", "Bernard", 45), occ("Jules", "Bernard", 14)), "SBLU-RES-10433");
         resa(ines, azur, today.plusDays(10), 7, ReservationStatus.COMPLETED, "IG-210-AZ",          // à traiter, sans conflit
                 occ("Inès", "Garcia", 31), occ("Pablo", "Garcia", 4));
         resa(lucas, azur, today.minusDays(20), 5, ReservationStatus.REJECTED, "LM-777-OR",
@@ -174,8 +183,8 @@ public class DataSeeder {
                 occ("Inès", "Garcia", 31), occ("Pablo", "Garcia", 4), occ("Carmen", "Garcia", 62));
 
         // Marina et Dune (Sarah, chez Lefèvre)
-        resa(camille, marina, today.minusDays(10), 7, ReservationStatus.VALIDATED, "CA-512-PT",
-                occ("Camille", "Petit", 34), occ("Hugo", "Petit", 36));
+        siblu(resa(camille, marina, today.minusDays(10), 7, ReservationStatus.VALIDATED, "CA-512-PT",
+                occ("Camille", "Petit", 34), occ("Hugo", "Petit", 36)), "SBLU-RES-20117");
         resa(lucas, marina, today.plusDays(14), 7, ReservationStatus.VALIDATED, "LM-777-OR",
                 occ("Lucas", "Moreau", 29), occ("Sarah", "Moreau", 28));
         resa(thomas, marina, today.plusDays(45), 7, ReservationStatus.COMPLETED, "TB-404-RN",
@@ -183,6 +192,13 @@ public class DataSeeder {
         resa(julie, dune, today.plusDays(1), 4, ReservationStatus.VALIDATED, "AA-123-BB",
                 occ("Julie", "Martin", 38));
         resa(ines, dune, today.plusDays(90), 7, ReservationStatus.PENDING, null);
+
+        // c) Réservations prises sur d'autres plateformes, saisies par le propriétaire (sans compte vacancier)
+        external(azur, ReservationSource.BOOKING, "Nathalie Roux", "0655555555", today.plusDays(25), 7, "NR-318-BK",
+                occ("Nathalie", "Roux", 41), occ("Paul", "Roux", 43), occ("Inès", "Roux", 9));
+        external(oceane, ReservationSource.BOOKING, "Kevin Laurent", null, today.plusDays(40), 7, null); // à compléter
+        external(marina, ReservationSource.AIRBNB, "Emma Schmidt", "+49 151 2345678", today.plusDays(28), 7, "BX-42-77",
+                occ("Emma", "Schmidt", 35), occ("Jonas", "Schmidt", 37));
 
         // ── 6. FACTURES DE FONCTIONNEMENT (saisies par les gérants, dues par les propriétaires) ─────
         invoice(marc, oceane, today.minusDays(18), InvoiceCategory.SERVICE, "Ménage fin de séjour — Océane", 65, InvoiceStatus.PAID);
@@ -248,6 +264,28 @@ public class DataSeeder {
             r.getOccupants().add(o);
         }
         return reservationRepository.save(r);
+    }
+
+    /** Réservation externe (Booking…) : confirmée d'office, client sans compte, données saisies par le propriétaire. */
+    private void external(Mobilhome mobilhome, ReservationSource source, String guestName, String guestPhone,
+                          LocalDate start, int nights, String immat, Occupant... occupants) {
+        Reservation r = Reservation.builder()
+                .mobilhome(mobilhome).source(source).guestName(guestName).guestPhone(guestPhone)
+                .startDate(start).endDate(start.plusDays(nights))
+                .numberOfPerson(occupants.length).immat(immat)
+                .status(ReservationStatus.VALIDATED)
+                .build();
+        for (Occupant o : occupants) {
+            o.setReservation(r);
+            r.getOccupants().add(o);
+        }
+        reservationRepository.save(r);
+    }
+
+    /** Numéro de réservation camping obtenu après déclaration du séjour (plaque + occupants). */
+    private void siblu(Reservation r, String sibluRef) {
+        r.setSibluRef(sibluRef);
+        reservationRepository.save(r);
     }
 
     private void invoice(Manager manager, Mobilhome mobilhome, LocalDate date, InvoiceCategory category,
