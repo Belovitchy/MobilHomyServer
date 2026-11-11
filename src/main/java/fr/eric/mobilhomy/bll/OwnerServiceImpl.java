@@ -37,6 +37,7 @@ public class OwnerServiceImpl implements OwnerService {
     private final OwnerRepository ownerRepository;
     private final AuthRepository authRepository;
     private final ImageRepository imageRepository;
+    private final InvoiceRepository invoiceRepository;
     private final PasswordEncoder passwordEncoder;
 
     // =====================================================================
@@ -79,6 +80,10 @@ public class OwnerServiceImpl implements OwnerService {
         if (reservationRepository.existsByMobilhomeIdAndStatusIn(m.getId(), BLOCKING_STATUSES)) {
             throw new BusinessRuleException(
                     "Ce mobil-home a des réservations validées ou en attente de traitement : suppression impossible");
+        }
+        if (invoiceRepository.existsByMobilhomeId(m.getId())) {
+            // Les factures sont des pièces comptables : on ne les supprime pas avec le mobil-home.
+            throw new BusinessRuleException("Ce mobil-home a des factures rattachées : suppression impossible");
         }
         // Cascade : images, brouillons et réservations refusées/annulées sont supprimés avec lui.
         mobilhomeRepository.delete(m);
@@ -208,7 +213,10 @@ public class OwnerServiceImpl implements OwnerService {
         ownerManagerRepository.flush();
 
         // 3. Si le gérant ne travaille plus pour personne, on supprime son compte (Auth → Manager en cascade).
-        if (ownerManagerRepository.countByManagerId(managerId) == 0 && manager.getAuth() != null) {
+        //    Exception : s'il a saisi des factures, on garde son compte pour conserver l'historique comptable.
+        if (ownerManagerRepository.countByManagerId(managerId) == 0
+                && !invoiceRepository.existsByManagerId(managerId)
+                && manager.getAuth() != null) {
             authRepository.delete(manager.getAuth());
         }
     }

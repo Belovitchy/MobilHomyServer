@@ -44,6 +44,7 @@ class OwnerServiceTest {
     @Mock private OwnerRepository ownerRepository;
     @Mock private AuthRepository authRepository;
     @Mock private ImageRepository imageRepository;
+    @Mock private InvoiceRepository invoiceRepository;
     @Mock private PasswordEncoder passwordEncoder;
 
     @InjectMocks
@@ -151,6 +152,16 @@ class OwnerServiceTest {
     void deleteMobilhome_avecReservationsActives_refuse() {
         when(mobilhomeRepository.findByIdAndOwnerId(10, OWNER_ID)).thenReturn(Optional.of(mobilhome));
         when(reservationRepository.existsByMobilhomeIdAndStatusIn(eq(10), anyCollection())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class, () -> ownerService.deleteMobilhome(OWNER_ID, 10));
+        verify(mobilhomeRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteMobilhome_avecFactures_refuse() {
+        when(mobilhomeRepository.findByIdAndOwnerId(10, OWNER_ID)).thenReturn(Optional.of(mobilhome));
+        when(reservationRepository.existsByMobilhomeIdAndStatusIn(eq(10), anyCollection())).thenReturn(false);
+        when(invoiceRepository.existsByMobilhomeId(10)).thenReturn(true);
 
         assertThrows(BusinessRuleException.class, () -> ownerService.deleteMobilhome(OWNER_ID, 10));
         verify(mobilhomeRepository, never()).delete(any());

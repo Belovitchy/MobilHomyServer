@@ -25,6 +25,14 @@ public interface ReservationRepository extends JpaRepository<Reservation, Intege
     List<Reservation> findAllByOwnerIdAndStatus(@Param("ownerId") Integer ownerId,
                                                 @Param("status") ReservationStatus status);
 
+    // ----- Espace gérant -----
+
+    /** Réservations d'un statut donné sur les mobil-homes gérés par ce gérant (vacancier chargé pour ses coordonnées). */
+    @Query("SELECT r FROM Reservation r JOIN FETCH r.mobilhome m LEFT JOIN FETCH r.vacationer v LEFT JOIN FETCH v.auth " +
+            "WHERE m.manager.id = :managerId AND r.status = :status ORDER BY r.startDate")
+    List<Reservation> findAllByManagerIdAndStatus(@Param("managerId") Integer managerId,
+                                                  @Param("status") ReservationStatus status);
+
     /** Ne renvoie la réservation que si elle porte sur un mobil-home du propriétaire. */
     Optional<Reservation> findByIdAndMobilhomeOwnerId(Integer id, Integer ownerId);
 

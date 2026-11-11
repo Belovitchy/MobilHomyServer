@@ -28,4 +28,11 @@ public interface MobilhomeRepository extends JpaRepository<Mobilhome, Integer> {
     Optional<Mobilhome> findByIdAndOwnerId(Integer id, Integer ownerId);
 
     List<Mobilhome> findByOwnerIdAndManagerId(Integer ownerId, Integer managerId);
+
+    // ----- Espace gérant -----
+
+    List<Mobilhome> findByManagerIdOrderByName(Integer managerId);
+
+    /** Ne renvoie le mobil-home que s'il est géré par ce gérant. */
+    Optional<Mobilhome> findByIdAndManagerId(Integer id, Integer managerId);
 }

@@ -2,6 +2,7 @@ package fr.eric.mobilhomy.controller;
 
 import fr.eric.mobilhomy.bo.*;
 import fr.eric.mobilhomy.dal.AuthRepository;
+import fr.eric.mobilhomy.dal.MobilhomeRepository;
 import fr.eric.mobilhomy.dal.ReservationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ class OwnerControllerIntegrationTest {
     @Autowired private WebApplicationContext context;
     @Autowired private AuthRepository authRepository;
     @Autowired private ReservationRepository reservationRepository;
+    @Autowired private MobilhomeRepository mobilhomeRepository;
     @Autowired private PasswordEncoder passwordEncoder;
 
     private MockMvc mvc;
@@ -52,10 +54,17 @@ class OwnerControllerIntegrationTest {
         return authRepository.findByLogin(login).orElseThrow();
     }
 
-    private Reservation submittedReservation() {
+    /** Demande soumise (à traiter) d'un mobil-home donné de Dupont — voir les scénarios du DataSeeder. */
+    private Reservation submittedReservation(String mobilhomeName) {
         return reservationRepository.findAll().stream()
                 .filter(r -> r.getStatus() == ReservationStatus.COMPLETED)
+                .filter(r -> mobilhomeName.equals(r.getMobilhome().getName()))
                 .findFirst().orElseThrow();
+    }
+
+    /** Seed : la demande d'Inès sur « Azur » ne chevauche aucun séjour validé. */
+    private Reservation submittedReservation() {
+        return submittedReservation("Azur");
     }
 
     // ----- Sécurité : qui a le droit d'appeler /api/owner/** ? -----
@@ -79,9 +88,12 @@ class OwnerControllerIntegrationTest {
 
     @Test
     void proprietaire_listeSesMobilhomes() throws Exception {
-        mvc.perform(get("/api/owner/mobilhomes").with(user(account(OWNER_LOGIN))))
+        Auth owner = account(OWNER_LOGIN);
+        int expected = mobilhomeRepository.findAllByOwnerIdWithImages(owner.getUtilisateur().getId()).size();
+
+        mvc.perform(get("/api/owner/mobilhomes").with(user(owner)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$.length()").value(expected))
                 .andExpect(jsonPath("$[0].title").exists())
                 .andExpect(jsonPath("$[0].postal_code").exists());
     }
@@ -105,6 +117,16 @@ class OwnerControllerIntegrationTest {
                 .andExpect(status().isOk());
         mvc.perform(put("/api/owner/reservations/{id}/validate", r.getId()).with(user(owner)))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void proprietaire_nePeutPasValiderUneDemandeQuiChevaucheUnSejourValide() throws Exception {
+        // Seed : la demande de Lucas sur « Océane » chevauche le séjour validé de Thomas.
+        Reservation conflit = submittedReservation("Océane");
+
+        mvc.perform(put("/api/owner/reservations/{id}/validate", conflit.getId()).with(user(account(OWNER_LOGIN))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").exists());
     }
 
     @Test
