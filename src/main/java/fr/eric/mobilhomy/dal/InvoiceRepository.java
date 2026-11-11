@@ -27,7 +27,4 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
     boolean existsByMobilhomeId(Integer mobilhomeId);
 
     boolean existsByManagerId(Integer managerId);
-
-    @Query("SELECT COALESCE(SUM(i.amount), 0) FROM Invoice i WHERE i.status = :status")
-    java.math.BigDecimal sumAmountByStatus(@Param("status") fr.eric.mobilhomy.bo.InvoiceStatus status);
 }

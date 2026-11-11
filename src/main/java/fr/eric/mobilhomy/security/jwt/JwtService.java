@@ -21,6 +21,20 @@ public class JwtService {
     @Value("${app.jwt.expiration}")
     private long EXPIRATION;
 
+    /** Refuse de démarrer avec un secret absent, mal encodé ou trop court pour HS256. */
+    @jakarta.annotation.PostConstruct
+    void checkSecret() {
+        byte[] keyBytes;
+        try {
+            keyBytes = Decoders.BASE64.decode(SECRET_KEY);
+        } catch (RuntimeException e) {
+            throw new IllegalStateException("app.jwt.secret (JWT_SECRET) doit être encodé en Base64", e);
+        }
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException("app.jwt.secret (JWT_SECRET) trop court : 32 octets minimum pour HS256");
+        }
+    }
+
     private Key getSignInKey() {
         byte[] keyBytes = Decoders.BASE64.decode(SECRET_KEY);
         return Keys.hmacShaKeyFor(keyBytes);

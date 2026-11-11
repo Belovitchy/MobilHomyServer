@@ -1,5 +1,6 @@
 package fr.eric.mobilhomy.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -41,6 +42,8 @@ public class MobilHomySecurityConfig {
                 .requestMatchers("/images/**").permitAll()
                 // Error page
                 .requestMatchers("/error").permitAll()
+                // Documentation de l'API (springdoc n'expose ces routes qu'en profil dev)
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 // Consultation libre des annonces (accès sans compte, cf. cahier des charges)
                 .requestMatchers(HttpMethod.GET, "/api/mobilhomes/**").permitAll()
                 // Vacancier : demandes de réservation
@@ -63,10 +66,12 @@ public class MobilHomySecurityConfig {
 
         return http.build();
     }
+    /** Origines autorisées lues dans la configuration (app.cors.allowed-origins / CORS_ORIGINS). */
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:4200"));
+        config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

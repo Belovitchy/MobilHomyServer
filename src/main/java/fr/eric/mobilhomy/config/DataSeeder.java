@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import fr.eric.mobilhomy.bo.*;
@@ -42,6 +43,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Configuration
+@Profile({"dev", "test"}) // jamais de comptes de démonstration en production
 @RequiredArgsConstructor
 public class DataSeeder {
 
