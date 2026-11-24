@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import java.util.Map;
 
@@ -35,6 +37,19 @@ public class ApiExceptionHandler {
     public ResponseEntity<Map<String, String>> handleDisabled() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Map.of("message", "Compte suspendu — contactez l'administrateur"));
+    }
+
+    /**
+     * Mauvais mot de passe ou compte inconnu : même statut et même message dans les deux cas,
+     * pour ne pas révéler si un compte existe. Sert aussi au « mot de passe actuel incorrect »
+     * lors d'un changement d'email ou de mot de passe (message métier conservé).
+     */
+    @ExceptionHandler({BadCredentialsException.class, UsernameNotFoundException.class})
+    public ResponseEntity<Map<String, String>> handleBadCredentials(Exception ex) {
+        String message = ex instanceof BadCredentialsException && !"Bad credentials".equals(ex.getMessage())
+                ? ex.getMessage()
+                : "Identifiants incorrects";
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", message));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

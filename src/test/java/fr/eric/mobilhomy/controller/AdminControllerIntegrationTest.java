@@ -134,4 +134,17 @@ class AdminControllerIntegrationTest {
                 .andExpect(result -> org.junit.jupiter.api.Assertions.assertFalse(
                         result.getResponse().getContentAsString().contains("suspendu")));
     }
+
+    @Test
+    void mauvaisMotDePasse_etCompteInconnu_memeReponse() throws Exception {
+        // Même statut et même message : on ne peut pas deviner si un compte existe
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson(OWNER_LOGIN, "faux")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Identifiants incorrects"));
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(loginJson("inconnu@mail.fr", "faux")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Identifiants incorrects"));
+    }
 }
